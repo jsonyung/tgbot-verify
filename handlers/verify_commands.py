@@ -3,7 +3,7 @@ import asyncio
 import logging
 import httpx
 import time
-from typing import Optional
+from typing import Optional, Dict
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -72,23 +72,6 @@ def msg_process_error(error, cost):
     )
 
 
-def msg_success_result(result, service_name):
-    result_msg = (
-        f"✅ {service_name} verification successful!\n"
-        f"✅ نجح تحقق {service_name}!\n\n"
-    )
-    if result.get("pending"):
-        result_msg += (
-            "✨ Document submitted, awaiting SheerID review.\n"
-            "تم تقديم المستند، بانتظار مراجعة SheerID.\n"
-            "⏱️ Expected review time: a few minutes.\n"
-            "الوقت المتوقع: بضع دقائق.\n\n"
-        )
-    if result.get("redirect_url"):
-        result_msg += f"🔗 Redirect link / رابط التوجيه:\n{result['redirect_url']}"
-    return result_msg
-
-
 def msg_processing(service_name, cost, extra=""):
     return (
         f"⏳ Processing {service_name} verification...\n"
@@ -97,6 +80,135 @@ def msg_processing(service_name, cost, extra=""):
         f"{extra}"
         "Please wait 1-2 minutes... / يرجى الانتظار 1-2 دقيقة..."
     )
+
+
+# ============================================================
+# Shared polling helpers
+# ============================================================
+
+async def _poll_sheerid_result(
+    verification_id: str,
+    max_wait: int = 60,
+    interval: int = 10
+) -> Optional[Dict]:
+    """Poll SheerID API for final verification result.
+
+    Args:
+        verification_id: SheerID verification ID
+        max_wait: Maximum wait in seconds (default 60s)
+        interval: Polling interval in seconds
+
+    Returns:
+        dict with keys: step, redirect_url, reward_code — or None on timeout/error
+    """
+    start_time = time.time()
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        while True:
+            elapsed = int(time.time() - start_time)
+            if elapsed >= max_wait:
+                logger.info(f"Poll timed out for {verification_id} ({elapsed}s)")
+                return None
+
+            try:
+                response = await client.get(
+                    f"https://my.sheerid.com/rest/v2/verification/{verification_id}"
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    current_step = data.get("currentStep")
+
+                    if current_step == "success":
+                        return {
+                            "step": "success",
+                            "redirect_url": data.get("redirectUrl"),
+                            "reward_code": (
+                                data.get("rewardCode")
+                                or data.get("rewardData", {}).get("rewardCode")
+                            ),
+                        }
+                    elif current_step == "error":
+                        logger.warning(f"Review failed: {data.get('errorIds', [])}")
+                        return {"step": "error", "error_ids": data.get("errorIds", [])}
+
+                # Still pending, wait and retry
+                await asyncio.sleep(interval)
+
+            except Exception as e:
+                logger.warning(f"Poll error: {e}")
+                await asyncio.sleep(interval)
+
+    return None
+
+
+async def _handle_success_with_polling(
+    processing_msg, result, verification_id, service_name, user_id, db, v_type, url
+):
+    """Handle a successful verification result, polling if pending."""
+
+    # If redirect_url is already present, show it immediately
+    if result.get("redirect_url") and not result.get("pending"):
+        result_msg = (
+            f"✅ {service_name} verification successful!\n"
+            f"✅ نجح تحقق {service_name}!\n\n"
+            f"🔗 Redirect link / رابط التفعيل:\n{result['redirect_url']}"
+        )
+        await processing_msg.edit_text(result_msg)
+        db.add_verification(user_id, v_type, url, "success", str(result), verification_id)
+        return
+
+    # Pending — tell user we're waiting and start polling
+    await processing_msg.edit_text(
+        f"✅ {service_name} — document submitted!\n"
+        f"تم تقديم مستند {service_name}!\n\n"
+        "⏳ Waiting for SheerID review (up to 60s)...\n"
+        "بانتظار مراجعة SheerID (حتى 60 ثانية)...\n\n"
+        f"📋 Verification ID: `{verification_id}`"
+    )
+
+    poll_result = await _poll_sheerid_result(verification_id, max_wait=60, interval=10)
+
+    if poll_result and poll_result.get("step") == "success":
+        redirect = poll_result.get("redirect_url")
+        code = poll_result.get("reward_code")
+
+        result_msg = (
+            f"🎉 {service_name} verification approved!\n"
+            f"تمت الموافقة على تحقق {service_name}!\n\n"
+        )
+        if redirect:
+            result_msg += f"🔗 Activation link / رابط التفعيل:\n{redirect}\n\n"
+        if code:
+            result_msg += f"🎁 Code / الكود: `{code}`\n"
+
+        await processing_msg.edit_text(result_msg)
+        db.add_verification(user_id, v_type, url, "success", str(poll_result), verification_id)
+
+    elif poll_result and poll_result.get("step") == "error":
+        db.add_balance(user_id, VERIFY_COST)
+        error_ids = poll_result.get("error_ids", [])
+        await processing_msg.edit_text(
+            f"❌ {service_name} — review rejected / تم رفض المراجعة\n\n"
+            f"Error / خطأ: {', '.join(error_ids) if error_ids else 'Unknown'}\n\n"
+            f"{msg_refunded(VERIFY_COST)}"
+        )
+        db.add_verification(user_id, v_type, url, "failed", str(poll_result), verification_id)
+
+    else:
+        # Timed out — save as pending, tell user to check later
+        await processing_msg.edit_text(
+            f"✅ {service_name} — document submitted!\n"
+            f"تم تقديم المستند بنجاح!\n\n"
+            "⏳ Review still in progress.\n"
+            "المراجعة لا تزال جارية.\n\n"
+            f"📋 Verification ID: `{verification_id}`\n\n"
+            "💡 Check later with / تحقق لاحقاً بـ:\n"
+            f"`/check {verification_id}`\n\n"
+            "Note: Points already deducted. Later checks are free.\n"
+            "ملاحظة: تم خصم النقاط. التحقق اللاحق مجاني."
+        )
+        db.add_verification(user_id, v_type, url, "pending", "Waiting for review", verification_id)
 
 
 # ============================================================
@@ -147,20 +259,14 @@ async def verify_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db:
         verifier = OneVerifier(verification_id)
         result = await asyncio.to_thread(verifier.verify)
 
-        db.add_verification(
-            user_id,
-            "gemini_one_pro",
-            url,
-            "success" if result["success"] else "failed",
-            str(result),
-        )
-
         if result["success"]:
-            await processing_msg.edit_text(
-                msg_success_result(result, "Gemini One Pro")
+            await _handle_success_with_polling(
+                processing_msg, result, verification_id,
+                "Gemini One Pro", user_id, db, "gemini_one_pro", url
             )
         else:
             db.add_balance(user_id, VERIFY_COST)
+            db.add_verification(user_id, "gemini_one_pro", url, "failed", str(result))
             await processing_msg.edit_text(
                 msg_verify_failed(result.get('message', 'Unknown error'), VERIFY_COST)
             )
@@ -216,20 +322,14 @@ async def verify2_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db
         verifier = K12Verifier(verification_id)
         result = await asyncio.to_thread(verifier.verify)
 
-        db.add_verification(
-            user_id,
-            "chatgpt_teacher_k12",
-            url,
-            "success" if result["success"] else "failed",
-            str(result),
-        )
-
         if result["success"]:
-            await processing_msg.edit_text(
-                msg_success_result(result, "ChatGPT Teacher K12")
+            await _handle_success_with_polling(
+                processing_msg, result, verification_id,
+                "ChatGPT Teacher K12", user_id, db, "chatgpt_teacher_k12", url
             )
         else:
             db.add_balance(user_id, VERIFY_COST)
+            db.add_verification(user_id, "chatgpt_teacher_k12", url, "failed", str(result))
             await processing_msg.edit_text(
                 msg_verify_failed(result.get('message', 'Unknown error'), VERIFY_COST)
             )
@@ -292,20 +392,14 @@ async def verify3_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db
             verifier = SpotifyVerifier(verification_id)
             result = await asyncio.to_thread(verifier.verify)
 
-        db.add_verification(
-            user_id,
-            "spotify_student",
-            url,
-            "success" if result["success"] else "failed",
-            str(result),
-        )
-
         if result["success"]:
-            await processing_msg.edit_text(
-                msg_success_result(result, "Spotify Student")
+            await _handle_success_with_polling(
+                processing_msg, result, verification_id,
+                "Spotify Student", user_id, db, "spotify_student", url
             )
         else:
             db.add_balance(user_id, VERIFY_COST)
+            db.add_verification(user_id, "spotify_student", url, "failed", str(result))
             await processing_msg.edit_text(
                 msg_verify_failed(result.get('message', 'Unknown error'), VERIFY_COST)
             )
@@ -391,33 +485,30 @@ async def verify4_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db
             f"📋 Verification ID: `{vid}`\n\n"
             f"🔍 Auto-fetching verification code...\n"
             f"جارِ جلب كود التحقق تلقائياً...\n"
-            f"(Max wait / انتظار أقصى: 20s)"
+            f"(Max wait / انتظار أقصى: 60s)"
         )
 
-        # Auto-fetch verification code
-        code = await _auto_get_reward_code(vid, max_wait=20, interval=5)
+        # Auto-fetch using shared polling
+        poll_result = await _poll_sheerid_result(vid, max_wait=60, interval=10)
 
-        if code:
+        if poll_result and poll_result.get("step") == "success":
+            code = poll_result.get("reward_code")
+            redirect = poll_result.get("redirect_url")
+
             result_msg = (
                 f"🎉 Verification successful! / نجح التحقق!\n\n"
                 f"✅ Document submitted / تم تقديم المستند\n"
                 f"✅ Review passed / تمت الموافقة\n"
-                f"✅ Code obtained / تم الحصول على الكود\n\n"
-                f"🎁 Verification code / كود التحقق: `{code}`\n"
             )
-            if result.get("redirect_url"):
-                result_msg += f"\n🔗 Redirect / توجيه:\n{result['redirect_url']}"
+            if code:
+                result_msg += f"✅ Code obtained / تم الحصول على الكود\n\n"
+                result_msg += f"🎁 Verification code / كود التحقق: `{code}`\n"
+            if redirect:
+                result_msg += f"\n🔗 Redirect / توجيه:\n{redirect}"
 
             await processing_msg.edit_text(result_msg)
-
-            db.add_verification(
-                user_id,
-                "bolt_teacher",
-                url,
-                "success",
-                f"Code: {code}",
-                vid
-            )
+            db.add_verification(user_id, "bolt_teacher", url, "success",
+                                f"Code: {code}" if code else str(poll_result), vid)
         else:
             await processing_msg.edit_text(
                 f"✅ Document submitted successfully!\n"
@@ -426,19 +517,12 @@ async def verify4_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db
                 f"لم يتم إنشاء الكود بعد (المراجعة قد تستغرق 1-5 دقائق).\n\n"
                 f"📋 Verification ID: `{vid}`\n\n"
                 f"💡 Query later with / استعلم لاحقاً بـ:\n"
-                f"`/getV4Code {vid}`\n\n"
+                f"`/check {vid}`\n\n"
                 f"Note: Points already deducted. Later queries are free.\n"
                 f"ملاحظة: تم خصم النقاط. الاستعلام اللاحق مجاني."
             )
-
-            db.add_verification(
-                user_id,
-                "bolt_teacher",
-                url,
-                "pending",
-                "Waiting for review",
-                vid
-            )
+            db.add_verification(user_id, "bolt_teacher", url, "pending",
+                                "Waiting for review", vid)
 
     except Exception as e:
         logger.error("Bolt.new verification error: %s", e)
@@ -446,61 +530,6 @@ async def verify4_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db
         await processing_msg.edit_text(
             msg_process_error(str(e), VERIFY_COST)
         )
-
-
-async def _auto_get_reward_code(
-    verification_id: str,
-    max_wait: int = 20,
-    interval: int = 5
-) -> Optional[str]:
-    """Auto-fetch verification code (lightweight polling)
-
-    Args:
-        verification_id: Verification ID
-        max_wait: Maximum wait time in seconds
-        interval: Polling interval in seconds
-
-    Returns:
-        str: Verification code, or None if not found
-    """
-    import time
-    start_time = time.time()
-    attempts = 0
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        while True:
-            elapsed = int(time.time() - start_time)
-            attempts += 1
-
-            if elapsed >= max_wait:
-                logger.info(f"Auto-fetch code timed out ({elapsed}s)")
-                return None
-
-            try:
-                response = await client.get(
-                    f"https://my.sheerid.com/rest/v2/verification/{verification_id}"
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    current_step = data.get("currentStep")
-
-                    if current_step == "success":
-                        code = data.get("rewardCode") or data.get("rewardData", {}).get("rewardCode")
-                        if code:
-                            logger.info(f"✅ Auto-fetch code success: {code} ({elapsed}s)")
-                            return code
-                    elif current_step == "error":
-                        logger.warning(f"Review failed: {data.get('errorIds', [])}")
-                        return None
-
-                await asyncio.sleep(interval)
-
-            except Exception as e:
-                logger.warning(f"Code query error: {e}")
-                await asyncio.sleep(interval)
-
-    return None
 
 
 async def verify5_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db: Database):
@@ -554,20 +583,14 @@ async def verify5_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db
             verifier = YouTubeVerifier(verification_id)
             result = await asyncio.to_thread(verifier.verify)
 
-        db.add_verification(
-            user_id,
-            "youtube_student",
-            url,
-            "success" if result["success"] else "failed",
-            str(result),
-        )
-
         if result["success"]:
-            await processing_msg.edit_text(
-                msg_success_result(result, "YouTube Student Premium")
+            await _handle_success_with_polling(
+                processing_msg, result, verification_id,
+                "YouTube Student Premium", user_id, db, "youtube_student", url
             )
         else:
             db.add_balance(user_id, VERIFY_COST)
+            db.add_verification(user_id, "youtube_student", url, "failed", str(result))
             await processing_msg.edit_text(
                 msg_verify_failed(result.get('message', 'Unknown error'), VERIFY_COST)
             )
@@ -579,8 +602,12 @@ async def verify5_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db
         )
 
 
-async def getV4Code_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db: Database):
-    """Handle /getV4Code - Get Bolt.new Teacher verification code"""
+# ============================================================
+# General check command (works for all services)
+# ============================================================
+
+async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db: Database):
+    """Handle /check - Query any verification status by ID"""
     user_id = update.effective_user.id
 
     if db.is_user_blocked(user_id):
@@ -593,18 +620,18 @@ async def getV4Code_command(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     if not context.args:
         await update.message.reply_text(
-            "📖 Usage / الاستخدام: /getV4Code <verification_id>\n\n"
-            "Example / مثال: /getV4Code 6929436b50d7dc18638890d0\n\n"
-            "The verification_id is provided after using /verify4.\n"
-            "يتم توفير معرف التحقق بعد استخدام /verify4."
+            "📖 Usage / الاستخدام: /check <verification_id>\n\n"
+            "Example / مثال: /check 6929436b50d7dc18638890d0\n\n"
+            "The verification_id is shown after any verification.\n"
+            "يظهر معرف التحقق بعد أي عملية تحقق."
         )
         return
 
     verification_id = context.args[0].strip()
 
     processing_msg = await update.message.reply_text(
-        "🔍 Querying verification code, please wait...\n"
-        "جارِ الاستعلام عن كود التحقق، يرجى الانتظار..."
+        "🔍 Querying verification status, please wait...\n"
+        "جارِ الاستعلام عن حالة التحقق، يرجى الانتظار..."
     )
 
     try:
@@ -627,37 +654,48 @@ async def getV4Code_command(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             reward_code = data.get("rewardCode") or data.get("rewardData", {}).get("rewardCode")
             redirect_url = data.get("redirectUrl")
 
-            if current_step == "success" and reward_code:
-                result_msg = (
-                    "✅ Verification successful! / نجح التحقق!\n\n"
-                    f"� Code / الكود: `{reward_code}`\n\n"
-                )
+            if current_step == "success":
+                result_msg = "✅ Verification successful! / نجح التحقق!\n\n"
                 if redirect_url:
-                    result_msg += f"🔗 Redirect / توجيه:\n{redirect_url}"
+                    result_msg += f"🔗 Activation link / رابط التفعيل:\n{redirect_url}\n\n"
+                if reward_code:
+                    result_msg += f"🎁 Code / الكود: `{reward_code}`\n"
+                if not redirect_url and not reward_code:
+                    result_msg += "✨ Approved but no link/code returned.\nتمت الموافقة ولكن لم يتم إرجاع رابط/كود."
                 await processing_msg.edit_text(result_msg)
+
             elif current_step == "pending":
                 await processing_msg.edit_text(
                     "⏳ Verification still under review. Please try again later.\n"
                     "التحقق لا يزال قيد المراجعة. يرجى المحاولة لاحقاً.\n\n"
-                    "Usually takes 1-5 minutes. / عادةً تستغرق 1-5 دقائق."
+                    "Usually takes 1-5 minutes. / عادةً تستغرق 1-5 دقائق.\n\n"
+                    f"💡 Try again with / حاول مجدداً بـ:\n`/check {verification_id}`"
                 )
+
             elif current_step == "error":
                 error_ids = data.get("errorIds", [])
                 await processing_msg.edit_text(
                     f"❌ Verification failed / فشل التحقق\n\n"
                     f"Error / خطأ: {', '.join(error_ids) if error_ids else 'Unknown / غير معروف'}"
                 )
+
             else:
                 await processing_msg.edit_text(
                     f"⚠️ Current status / الحالة الحالية: {current_step}\n\n"
-                    "Code not generated yet. Please try again later.\n"
-                    "لم يتم إنشاء الكود بعد. يرجى المحاولة لاحقاً."
+                    "Not completed yet. Please try again later.\n"
+                    "لم تكتمل بعد. يرجى المحاولة لاحقاً."
                 )
 
     except Exception as e:
-        logger.error("Bolt.new code fetch failed: %s", e)
+        logger.error("Check verification failed: %s", e)
         await processing_msg.edit_text(
             f"❌ Error during query / خطأ أثناء الاستعلام: {str(e)}\n\n"
             "Please try again later or contact admin.\n"
             "يرجى المحاولة لاحقاً أو التواصل مع المسؤول."
         )
+
+
+# Keep /getV4Code as alias for backward compatibility
+async def getV4Code_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db: Database):
+    """Handle /getV4Code - alias for /check (backward compatibility)"""
+    await check_command(update, context, db)

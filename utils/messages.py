@@ -56,8 +56,8 @@ def get_about_message() -> str:
         "   أرسل الأمر مع الرابط\n"
         "3. Wait for processing and check results\n"
         "   انتظر المعالجة وتحقق من النتائج\n"
-        "4. Bolt.new auto-fetches code. Manual query: /getV4Code <verification_id>\n"
-        "   Bolt.new يجلب الكود تلقائياً. استعلام يدوي: /getV4Code\n"
+        "4. Bot auto-waits for result. If timeout, use: /check <verification_id>\n"
+        "   البوت ينتظر النتيجة تلقائياً. إذا انتهت المهلة: /check\n"
         "\n"
         "More commands / المزيد: /help"
     )
@@ -81,6 +81,8 @@ def get_help_message(is_admin: bool = False) -> str:
         f"/verify4 <link> - Bolt.new Teacher (-{VERIFY_COST}pt)\n"
         f"/verify5 <link> - YouTube Student Premium (-{VERIFY_COST}pt)\n"
         "/getV4Code <id> - Get Bolt.new code / كود Bolt.new\n"
+        "/check <id> - Check verification result / استعلام نتيجة التحقق\n"
+        "/status - Verification history / سجل التحقق\n"
         "/help - This help / هذه المساعدة\n"
         f"❓ Troubleshooting / استكشاف الأخطاء: {HELP_NOTION_URL}\n"
     )

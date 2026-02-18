@@ -35,6 +35,10 @@ Each verification costs **1 point**. Points are refunded if verification fails.
 | `/verify4 <link>` | Bolt.new Teacher | Teacher | خصم Bolt.new التعليمي |
 | `/verify5 <link>` | YouTube Premium Student | Student | خصم YouTube Premium للطلاب |
 | `/getV4Code <id>` | Bolt.new code query | — | استعلام كود Bolt.new |
+| `/check <id>` | Check any verification result | — | استعلام نتيجة أي تحقق |
+
+> **Note:** `/getV4Code` still works as an alias for `/check`.
+> `/getV4Code` لا يزال يعمل كاسم بديل لـ `/check`.
 
 ### How to use verification / كيفية استخدام التحقق
 

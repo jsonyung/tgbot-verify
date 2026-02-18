@@ -23,6 +23,7 @@ from handlers.verify_commands import (
     verify4_command,
     verify5_command,
     getV4Code_command,
+    check_command,
 )
 from handlers.admin_commands import (
     addbalance_command,
@@ -77,6 +78,7 @@ def main():
     application.add_handler(CommandHandler("verify4", partial(verify4_command, db=db)))
     application.add_handler(CommandHandler("verify5", partial(verify5_command, db=db)))
     application.add_handler(CommandHandler("getV4Code", partial(getV4Code_command, db=db)))
+    application.add_handler(CommandHandler("check", partial(check_command, db=db)))
 
     # 注册管理员命令
     application.add_handler(CommandHandler("addbalance", partial(addbalance_command, db=db)))

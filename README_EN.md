@@ -121,27 +121,66 @@ python bot.py
 
 ## 🐳 Docker Deployment
 
+The `docker-compose.yml` includes two services — no external MySQL installation needed:
+
+| Service | Description | Image |
+|---------|-------------|-------|
+| `mysql` | MySQL 8.0 database (with healthcheck and persistent storage) | mysql:8.0 |
+| `tgbot` | Telegram verification bot | Local build |
+
+### Prerequisites
+
+- Install [Docker](https://docs.docker.com/get-docker/) and Docker Compose plugin
+- Get a Telegram Bot Token (via [@BotFather](https://t.me/BotFather))
+- Get your Telegram User ID (via [@userinfobot](https://t.me/userinfobot))
+
 ### Using Docker Compose (Recommended)
 
 ```bash
-# 1. Configure .env file
+# 1. Clone the project
+git clone https://github.com/PastKing/tgbot-verify.git
+cd tgbot-verify
+
+# 2. Configure environment variables
 cp env.example .env
-nano .env
+nano .env    # Fill in BOT_TOKEN, ADMIN_USER_ID, MYSQL_PASSWORD, etc.
 
-# 2. Start services
-docker-compose up -d
+# 3. Build and start all services (MySQL + Bot)
+docker compose up -d --build
 
-# 3. View logs
-docker-compose logs -f
+# 4. View logs
+docker compose logs -f
+
+# 5. Check service status
+docker compose ps
 ```
 
+> **⚠️ Note**: Newer Docker versions use `docker compose` (with a space). If `docker-compose` is not found, install the plugin:
+> ```bash
+> sudo apt install docker-compose-plugin
+> ```
+
+### Useful Commands
+
+| Command | Description |
+|---------|-------------|
+| `docker compose up -d --build` | Build and start all services |
+| `docker compose logs -f` | View logs in real-time |
+| `docker compose logs -f tgbot` | View bot logs only |
+| `docker compose ps` | Check service status |
+| `docker compose restart tgbot` | Restart bot only |
+| `docker compose down` | Stop all services |
+| `docker compose down -v` | Stop and delete data (⚠️ deletes database) |
+
 ### Manual Docker Deployment
+
+If not using Docker Compose, you need to provide your own MySQL database:
 
 ```bash
 # Build image
 docker build -t tgbot-verify .
 
-# Run container
+# Run container (requires external MySQL)
 docker run -d \
   --name tgbot-verify \
   --env-file .env \

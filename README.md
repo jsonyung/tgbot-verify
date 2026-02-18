@@ -121,27 +121,66 @@ python bot.py
 
 ## 🐳 Docker 部署
 
+`docker-compose.yml` 包含两个服务，无需额外安装 MySQL：
+
+| 服务 | 说明 | 镜像 |
+|------|------|------|
+| `mysql` | MySQL 8.0 数据库（带健康检查和持久化存储） | mysql:8.0 |
+| `tgbot` | Telegram 认证机器人 | 本地构建 |
+
+### 前置要求
+
+- 安装 [Docker](https://docs.docker.com/get-docker/) 和 Docker Compose 插件
+- 获取 Telegram Bot Token（通过 [@BotFather](https://t.me/BotFather)）
+- 获取你的 Telegram 用户 ID（通过 [@userinfobot](https://t.me/userinfobot)）
+
 ### 使用 Docker Compose（推荐）
 
 ```bash
-# 1. 修改 .env 文件配置
+# 1. 克隆项目
+git clone https://github.com/PastKing/tgbot-verify.git
+cd tgbot-verify
+
+# 2. 配置环境变量
 cp env.example .env
-nano .env
+nano .env    # 填写 BOT_TOKEN、ADMIN_USER_ID、MYSQL_PASSWORD 等
 
-# 2. 启动服务
-docker-compose up -d
+# 3. 构建并启动所有服务（MySQL + 机器人）
+docker compose up -d --build
 
-# 3. 查看日志
-docker-compose logs -f
+# 4. 查看日志
+docker compose logs -f
+
+# 5. 确认服务运行状态
+docker compose ps
 ```
 
+> **⚠️ 注意**：新版 Docker 使用 `docker compose`（空格）命令。如果提示 `docker-compose` 未找到，请安装插件：
+> ```bash
+> sudo apt install docker-compose-plugin
+> ```
+
+### 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `docker compose up -d --build` | 构建并启动所有服务 |
+| `docker compose logs -f` | 实时查看日志 |
+| `docker compose logs -f tgbot` | 仅查看机器人日志 |
+| `docker compose ps` | 查看服务状态 |
+| `docker compose restart tgbot` | 重启机器人 |
+| `docker compose down` | 停止所有服务 |
+| `docker compose down -v` | 停止并删除数据（⚠️ 删除数据库） |
+
 ### 手动 Docker 部署
+
+如果不使用 Docker Compose，需要自行提供 MySQL 数据库：
 
 ```bash
 # 构建镜像
 docker build -t tgbot-verify .
 
-# 运行容器
+# 运行容器（需要外部 MySQL）
 docker run -d \
   --name tgbot-verify \
   --env-file .env \

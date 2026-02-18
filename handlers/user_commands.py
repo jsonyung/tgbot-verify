@@ -1,5 +1,6 @@
 """User command handlers / معالجات أوامر المستخدم"""
 import logging
+from datetime import datetime
 from typing import Optional
 
 from telegram import Update
@@ -236,3 +237,85 @@ async def use_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db: Da
             f"Points earned / نقاط مكتسبة: {result}\n"
             f"Current balance / الرصيد الحالي: {user['balance']}"
         )
+
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db: Database):
+    """Handle /status command - view verification history"""
+    if await reject_group_command(update):
+        return
+
+    user_id = update.effective_user.id
+
+    if db.is_user_blocked(user_id):
+        await update.message.reply_text(
+            "🚫 You are blocked and cannot use this feature.\n"
+            "أنت محظور ولا يمكنك استخدام هذه الميزة."
+        )
+        return
+
+    if not db.user_exists(user_id):
+        await update.message.reply_text(
+            "⚠️ Please register first with /start.\n"
+            "يرجى التسجيل أولاً باستخدام /start."
+        )
+        return
+
+    verifications = db.get_user_verifications(user_id)
+
+    if not verifications:
+        await update.message.reply_text(
+            "📋 No verification history found.\n"
+            "لا يوجد سجل تحقق سابق.\n\n"
+            "Use /verify, /verify2, /verify3, /verify4 or /verify5 to start.\n"
+            "استخدم أوامر التحقق للبدء."
+        )
+        return
+
+    # Service name mapping
+    service_names = {
+        "gemini_one_pro": "Gemini One Pro",
+        "chatgpt_teacher_k12": "ChatGPT K12",
+        "spotify_student": "Spotify Student",
+        "youtube_student": "YouTube Premium",
+        "bolt_teacher": "Bolt.new Teacher",
+    }
+
+    # Status emoji mapping
+    status_icons = {
+        "success": "✅",
+        "failed": "❌",
+        "pending": "⏳",
+    }
+
+    msg = "📋 Verification History / سجل التحقق:\n\n"
+
+    for v in verifications[:10]:  # Show last 10
+        service = service_names.get(v["verification_type"], v["verification_type"])
+        icon = status_icons.get(v["status"], "❓")
+        status_text = {
+            "success": "Success / نجاح",
+            "failed": "Failed / فشل",
+            "pending": "Pending / معلق",
+        }.get(v["status"], v["status"])
+
+        # Format date
+        if isinstance(v["created_at"], datetime):
+            date_str = v["created_at"].strftime("%Y-%m-%d %H:%M")
+        else:
+            date_str = str(v["created_at"])[:16]
+
+        msg += f"{icon} {service}\n"
+        msg += f"   Status / الحالة: {status_text}\n"
+        msg += f"   Date / التاريخ: {date_str}\n"
+
+        if v.get("verification_id") and v["status"] == "pending":
+            msg += f"   🔍 /getV4Code {v['verification_id']}\n"
+
+        msg += "\n"
+
+    total = len(verifications)
+    if total > 10:
+        msg += f"(Showing 10 of {total} / عرض 10 من {total})"
+
+    await update.message.reply_text(msg)
+

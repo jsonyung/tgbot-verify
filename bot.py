@@ -14,12 +14,14 @@ from handlers.user_commands import (
     checkin_command,
     invite_command,
     use_command,
+    status_command,
 )
 from handlers.verify_commands import (
     verify_command,
     verify2_command,
     verify3_command,
     verify4_command,
+    verify5_command,
     getV4Code_command,
 )
 from handlers.admin_commands import (
@@ -66,12 +68,14 @@ def main():
     application.add_handler(CommandHandler("qd", partial(checkin_command, db=db)))
     application.add_handler(CommandHandler("invite", partial(invite_command, db=db)))
     application.add_handler(CommandHandler("use", partial(use_command, db=db)))
+    application.add_handler(CommandHandler("status", partial(status_command, db=db)))
 
     # 注册验证命令
     application.add_handler(CommandHandler("verify", partial(verify_command, db=db)))
     application.add_handler(CommandHandler("verify2", partial(verify2_command, db=db)))
     application.add_handler(CommandHandler("verify3", partial(verify3_command, db=db)))
     application.add_handler(CommandHandler("verify4", partial(verify4_command, db=db)))
+    application.add_handler(CommandHandler("verify5", partial(verify5_command, db=db)))
     application.add_handler(CommandHandler("getV4Code", partial(getV4Code_command, db=db)))
 
     # 注册管理员命令

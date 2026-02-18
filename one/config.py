@@ -143,3 +143,9 @@ DEFAULT_UTM_PARAMS = {
     'utm_campaign': 'students_pmax_bts-slap'
 }
 
+
+def get_random_school_id():
+    """Pick a random PSU campus for diversity."""
+    import random
+    return random.choice(list(SCHOOLS.keys()))
+

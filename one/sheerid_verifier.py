@@ -97,7 +97,7 @@ class SheerIDVerifier:
                 first_name = name["first_name"]
                 last_name = name["last_name"]
 
-            school_id = school_id or config.DEFAULT_SCHOOL_ID
+            school_id = school_id or config.get_random_school_id()
             school = config.SCHOOLS[school_id]
 
             if not email:

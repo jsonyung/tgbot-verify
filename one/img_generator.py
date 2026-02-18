@@ -1,54 +1,216 @@
-"""PNG 学生证生成模块 - Penn State LionPATH"""
+"""PNG student card generator - Penn State LionPATH (randomized)"""
 import random
 from datetime import datetime
 from io import BytesIO
-import base64
 
 
 def generate_psu_id():
-    """生成随机 PSU ID (9位数字)"""
+    """Generate random PSU ID (9 digits)"""
     return f"9{random.randint(10000000, 99999999)}"
 
 
 def generate_psu_email(first_name, last_name):
-    """
-    生成 PSU 邮箱
-    格式: firstName.lastName + 3-4位数字 @psu.edu
-    """
+    """Generate PSU email: firstName.lastName + 3-4 digits @psu.edu"""
     digit_count = random.choice([3, 4])
     digits = ''.join([str(random.randint(0, 9)) for _ in range(digit_count)])
     email = f"{first_name.lower()}.{last_name.lower()}{digits}@psu.edu"
     return email
 
 
+# ============================================================
+# Randomized course data
+# ============================================================
+
+COURSES_POOL = [
+    # (code, title, units)
+    ("CMPSC 121", "Introduction to Programming", "3.00"),
+    ("CMPSC 122", "Intermediate Programming", "3.00"),
+    ("CMPSC 131", "Programming and Computation I", "3.00"),
+    ("CMPSC 132", "Programming and Computation II", "3.00"),
+    ("CMPSC 221", "Object-Oriented Programming with Web", "3.00"),
+    ("CMPSC 360", "Discrete Mathematics for CS", "3.00"),
+    ("CMPSC 431W", "Database Management Systems", "3.00"),
+    ("CMPSC 461", "Programming Language Concepts", "3.00"),
+    ("CMPSC 465", "Data Structures and Algorithms", "3.00"),
+    ("CMPSC 473", "Operating Systems Design", "3.00"),
+    ("CMPSC 474", "Server-Side Web Development", "3.00"),
+    ("CMPSC 483W", "Software Engineering Capstone", "3.00"),
+    ("MATH 140", "Calculus With Analytic Geometry I", "4.00"),
+    ("MATH 141", "Calculus With Analytic Geometry II", "4.00"),
+    ("MATH 220", "Matrices", "2.00"),
+    ("MATH 230", "Calculus and Vector Analysis", "4.00"),
+    ("MATH 231", "Calculus of Several Variables", "2.00"),
+    ("MATH 251", "Ordinary and Partial Differential Equations", "4.00"),
+    ("MATH 311W", "Concepts of Discrete Mathematics", "3.00"),
+    ("STAT 200", "Elementary Statistics", "4.00"),
+    ("STAT 318", "Elementary Probability", "3.00"),
+    ("STAT 414", "Introduction to Probability Theory", "3.00"),
+    ("PHYS 211", "General Physics: Mechanics", "4.00"),
+    ("PHYS 212", "General Physics: Electricity and Magnetism", "4.00"),
+    ("PHYS 213", "Foundations of Physics III", "2.00"),
+    ("ENGL 015", "Rhetoric and Composition", "3.00"),
+    ("ENGL 202C", "Technical Writing", "3.00"),
+    ("ENGL 030", "Heritage of Western Literature", "3.00"),
+    ("ECON 102", "Introductory Microeconomic Analysis", "3.00"),
+    ("ECON 104", "Introductory Macroeconomic Analysis", "3.00"),
+    ("IST 110", "Information, People, and Technology", "3.00"),
+    ("IST 210", "Organization of Data", "3.00"),
+    ("IST 261", "Application Development Design", "3.00"),
+    ("IST 311", "Object-Oriented Design and Software Applications", "3.00"),
+    ("PSYCH 100", "Introductory Psychology", "3.00"),
+    ("COMM 150", "Effective Speech", "3.00"),
+    ("BIOL 110", "Biology: Basic Concepts and Biodiversity", "4.00"),
+    ("CHEM 110", "Chemical Principles I", "3.00"),
+    ("SOC 119", "Introduction to Sociology", "3.00"),
+    ("HIST 020", "American Civilization to 1877", "3.00"),
+    ("PHIL 103", "Introduction to Ethics", "3.00"),
+    ("ACCTG 211", "Financial and Managerial Accounting", "4.00"),
+    ("MGMT 301", "Basic Management Concepts", "3.00"),
+    ("MKTG 301", "Principles of Marketing", "3.00"),
+    ("FIN 301", "Corporation Finance", "3.00"),
+    ("EE 210", "Circuits and Devices", "4.00"),
+    ("ME 201", "Introduction to Thermodynamics", "3.00"),
+    ("KINES 084", "Concepts of Fitness and Wellness", "3.00"),
+]
+
+ROOMS_POOL = [
+    # (building, room_number)
+    ("Willard", ["062", "119", "203", "315"]),
+    ("Thomas", ["102", "201", "310", "117"]),
+    ("Westgate", ["E101", "E201", "W103", "W210"]),
+    ("Boucke", ["210", "304", "106", "225"]),
+    ("Osmond", ["112", "215", "101", "306"]),
+    ("Hammond", ["100", "218", "312", "114"]),
+    ("Deike", ["115", "207", "308", "104"]),
+    ("Sackett", ["201", "302", "110", "204"]),
+    ("Sparks", ["101", "203", "315", "106"]),
+    ("Rackley", ["102", "204", "301", "105"]),
+    ("IST", ["120", "220", "325", "118"]),
+    ("Smeal", ["106", "210", "314", "100"]),
+    ("Forum", ["101", "207", "301", "114"]),
+    ("Kern", ["103", "212", "314", "107"]),
+    ("Wartik", ["100", "111", "222", "300"]),
+    ("Mueller", ["103", "204", "301", "105"]),
+    ("Henderson", ["101", "204", "308", "112"]),
+    ("Leonhard", ["100", "203", "307", "115"]),
+]
+
+TIME_SLOTS = [
+    "MoWeFr 8:00AM - 8:50AM",
+    "MoWeFr 9:05AM - 9:55AM",
+    "MoWeFr 10:10AM - 11:00AM",
+    "MoWeFr 11:15AM - 12:05PM",
+    "MoWeFr 1:25PM - 2:15PM",
+    "MoWeFr 2:30PM - 3:20PM",
+    "MoWeFr 3:35PM - 4:25PM",
+    "TuTh 8:00AM - 9:15AM",
+    "TuTh 9:05AM - 10:20AM",
+    "TuTh 10:35AM - 11:50AM",
+    "TuTh 12:05PM - 1:20PM",
+    "TuTh 1:35PM - 2:50PM",
+    "TuTh 2:30PM - 3:45PM",
+    "TuTh 4:00PM - 5:15PM",
+    "Mo 6:00PM - 8:50PM",
+    "Tu 6:00PM - 8:50PM",
+    "We 6:00PM - 8:50PM",
+    "Th 6:00PM - 8:50PM",
+]
+
+MAJORS = [
+    "Computer Science (BS)",
+    "Software Engineering (BS)",
+    "Information Sciences and Technology (BS)",
+    "Data Science (BS)",
+    "Electrical Engineering (BS)",
+    "Mechanical Engineering (BS)",
+    "Business Administration (BS)",
+    "Psychology (BA)",
+    "Biology (BS)",
+    "Chemistry (BS)",
+    "Mathematics (BS)",
+    "Economics (BA)",
+    "Communications (BA)",
+    "Accounting (BS)",
+    "Finance (BS)",
+    "Marketing (BS)",
+    "Civil Engineering (BS)",
+    "Aerospace Engineering (BS)",
+]
+
+
+def _get_current_semester():
+    """Return the current semester string based on today's date."""
+    now = datetime.now()
+    month = now.month
+    year = now.year
+
+    if month >= 8:
+        return f"Fall {year}", f"Aug 25 - Dec 12"
+    elif month >= 5:
+        return f"Summer {year}", f"May 13 - Aug 8"
+    else:
+        return f"Spring {year}", f"Jan 13 - May 2"
+
+
+def _generate_random_schedule():
+    """Generate 4-5 random courses with unique times and rooms."""
+    num_courses = random.choice([4, 5])
+    courses = random.sample(COURSES_POOL, num_courses)
+    times = random.sample(TIME_SLOTS, num_courses)
+
+    schedule = []
+    for i, (code, title, units) in enumerate(courses):
+        building = random.choice(ROOMS_POOL)
+        room = f"{building[0]} {random.choice(building[1])}"
+        class_nbr = str(random.randint(10000, 29999))
+        schedule.append({
+            "class_nbr": class_nbr,
+            "code": code,
+            "title": title,
+            "time": times[i],
+            "room": room,
+            "units": units,
+        })
+
+    return schedule
+
+
 def generate_html(first_name, last_name, school_id='2565'):
-    """
-    生成 Penn State LionPATH HTML
+    """Generate Penn State LionPATH HTML with randomized data.
 
     Args:
-        first_name: 名字
-        last_name: 姓氏
-        school_id: 学校 ID
+        first_name: First name
+        last_name: Last name
+        school_id: School ID
 
     Returns:
-        str: HTML 内容
+        str: HTML content
     """
     psu_id = generate_psu_id()
     name = f"{first_name} {last_name}"
     date = datetime.now().strftime('%m/%d/%Y, %I:%M:%S %p')
+    major = random.choice(MAJORS)
+    semester, semester_range = _get_current_semester()
+    schedule = _generate_random_schedule()
 
-    # 随机选择专业
-    majors = [
-        'Computer Science (BS)',
-        'Software Engineering (BS)',
-        'Information Sciences and Technology (BS)',
-        'Data Science (BS)',
-        'Electrical Engineering (BS)',
-        'Mechanical Engineering (BS)',
-        'Business Administration (BS)',
-        'Psychology (BA)'
-    ]
-    major = random.choice(majors)
+    # Build course rows
+    course_rows = ""
+    for c in schedule:
+        course_rows += f"""
+                <tr>
+                    <td>{c['class_nbr']}</td>
+                    <td class="course-code">{c['code']}</td>
+                    <td class="course-title">{c['title']}</td>
+                    <td>{c['time']}</td>
+                    <td>{c['room']}</td>
+                    <td>{c['units']}</td>
+                </tr>"""
+
+    # Calculate total units
+    total_units = sum(float(c['units']) for c in schedule)
+
+    # Current year for copyright
+    current_year = datetime.now().year
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -58,7 +220,7 @@ def generate_html(first_name, last_name, school_id='2565'):
     <title>LionPATH - Student Home</title>
     <style>
         :root {{
-            --psu-blue: #1E407C; /* Penn State Nittany Navy */
+            --psu-blue: #1E407C;
             --psu-light-blue: #96BEE6;
             --bg-gray: #f4f4f4;
             --text-color: #333;
@@ -66,7 +228,7 @@ def generate_html(first_name, last_name, school_id='2565'):
 
         body {{
             font-family: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
-            background-color: #e0e0e0; /* 浏览器背景 */
+            background-color: #e0e0e0;
             margin: 0;
             padding: 20px;
             color: var(--text-color);
@@ -74,7 +236,6 @@ def generate_html(first_name, last_name, school_id='2565'):
             justify-content: center;
         }}
 
-        /* 模拟浏览器窗口 */
         .viewport {{
             width: 100%;
             max-width: 1100px;
@@ -85,7 +246,6 @@ def generate_html(first_name, last_name, school_id='2565'):
             flex-direction: column;
         }}
 
-        /* 顶部导航栏 LionPATH */
         .header {{
             background-color: var(--psu-blue);
             color: white;
@@ -102,7 +262,6 @@ def generate_html(first_name, last_name, school_id='2565'):
             gap: 15px;
         }}
 
-        /* PSU Logo 模拟 */
         .psu-logo {{
             font-family: "Georgia", serif;
             font-size: 20px;
@@ -136,7 +295,6 @@ def generate_html(first_name, last_name, school_id='2565'):
         .nav-item {{ cursor: pointer; }}
         .nav-item.active {{ color: var(--psu-blue); font-weight: bold; border-bottom: 2px solid var(--psu-blue); padding-bottom: 8px; }}
 
-        /* 主内容区 */
         .content {{
             padding: 30px;
             flex: 1;
@@ -167,7 +325,6 @@ def generate_html(first_name, last_name, school_id='2565'):
             font-weight: bold;
         }}
 
-        /* 学生信息卡片 */
         .student-card {{
             background: #fcfcfc;
             border: 1px solid #e0e0e0;
@@ -185,7 +342,6 @@ def generate_html(first_name, last_name, school_id='2565'):
             padding: 4px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #b2f5ea;
         }}
 
-        /* 课程表 */
         .schedule-table {{
             width: 100%;
             border-collapse: collapse;
@@ -208,7 +364,11 @@ def generate_html(first_name, last_name, school_id='2565'):
         .course-code {{ font-weight: bold; color: var(--psu-blue); }}
         .course-title {{ font-weight: 500; }}
 
-        /* 打印适配 */
+        .total-row {{
+            font-weight: bold;
+            background-color: #f8f8f8;
+        }}
+
         @media print {{
             body {{ background: white; padding: 0; }}
             .viewport {{ box-shadow: none; max-width: 100%; min-height: auto; }}
@@ -244,7 +404,7 @@ def generate_html(first_name, last_name, school_id='2565'):
         <div class="page-header">
             <h1 class="page-title">My Class Schedule</h1>
             <div class="term-selector">
-                Term: <strong>Fall 2025</strong> (Aug 25 - Dec 12)
+                Term: <strong>{semester}</strong> ({semester_range})
             </div>
         </div>
 
@@ -263,7 +423,7 @@ def generate_html(first_name, last_name, school_id='2565'):
             </div>
             <div>
                 <div class="info-label">Enrollment Status</div>
-                <div class="status-badge">✅ Enrolled</div>
+                <div class="status-badge">&#10003; Enrolled</div>
             </div>
         </div>
 
@@ -277,57 +437,21 @@ def generate_html(first_name, last_name, school_id='2565'):
                     <th width="10%">Class Nbr</th>
                     <th width="15%">Course</th>
                     <th width="35%">Title</th>
-                    <th width="20%">Days & Times</th>
+                    <th width="20%">Days &amp; Times</th>
                     <th width="10%">Room</th>
                     <th width="10%">Units</th>
                 </tr>
             </thead>
-            <tbody>
-                <tr>
-                    <td>14920</td>
-                    <td class="course-code">CMPSC 465</td>
-                    <td class="course-title">Data Structures and Algorithms</td>
-                    <td>MoWeFr 10:10AM - 11:00AM</td>
-                    <td>Willard 062</td>
-                    <td>3.00</td>
-                </tr>
-                <tr>
-                    <td>18233</td>
-                    <td class="course-code">MATH 230</td>
-                    <td class="course-title">Calculus and Vector Analysis</td>
-                    <td>TuTh 1:35PM - 2:50PM</td>
-                    <td>Thomas 102</td>
-                    <td>4.00</td>
-                </tr>
-                <tr>
-                    <td>20491</td>
-                    <td class="course-code">CMPSC 473</td>
-                    <td class="course-title">Operating Systems Design</td>
-                    <td>MoWe 2:30PM - 3:45PM</td>
-                    <td>Westgate E201</td>
-                    <td>3.00</td>
-                </tr>
-                <tr>
-                    <td>11029</td>
-                    <td class="course-code">ENGL 202C</td>
-                    <td class="course-title">Technical Writing</td>
-                    <td>Fr 1:25PM - 2:15PM</td>
-                    <td>Boucke 304</td>
-                    <td>3.00</td>
-                </tr>
-                <tr>
-                    <td>15502</td>
-                    <td class="course-code">STAT 318</td>
-                    <td class="course-title">Elementary Probability</td>
-                    <td>TuTh 9:05AM - 10:20AM</td>
-                    <td>Osmond 112</td>
-                    <td>3.00</td>
+            <tbody>{course_rows}
+                <tr class="total-row">
+                    <td colspan="5" style="text-align: right;">Total Units:</td>
+                    <td>{total_units:.2f}</td>
                 </tr>
             </tbody>
         </table>
 
         <div style="margin-top: 50px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 11px; color: #888; text-align: center;">
-            &copy; 2025 The Pennsylvania State University. All rights reserved.<br>
+            &copy; {current_year} The Pennsylvania State University. All rights reserved.<br>
             LionPATH is the student information system for Penn State.
         </div>
     </div>
@@ -341,67 +465,58 @@ def generate_html(first_name, last_name, school_id='2565'):
 
 
 def generate_image(first_name, last_name, school_id='2565'):
-    """
-    生成 Penn State LionPATH 截图 PNG
+    """Generate Penn State LionPATH screenshot PNG.
 
     Args:
-        first_name: 名字
-        last_name: 姓氏
-        school_id: 学校 ID
+        first_name: First name
+        last_name: Last name
+        school_id: School ID
 
     Returns:
-        bytes: PNG 图片数据
+        bytes: PNG image data
     """
     try:
         from playwright.sync_api import sync_playwright
 
-        # 生成 HTML
         html_content = generate_html(first_name, last_name, school_id)
 
-        # 使用 Playwright 截图（替代 Selenium）
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={'width': 1200, 'height': 900})
             page.set_content(html_content, wait_until='load')
-            page.wait_for_timeout(500)  # 等待样式加载
+            page.wait_for_timeout(500)
             screenshot_bytes = page.screenshot(type='png', full_page=True)
             browser.close()
 
         return screenshot_bytes
 
     except ImportError:
-        raise Exception("需要安装 playwright: pip install playwright && playwright install chromium")
+        raise Exception("Playwright required: pip install playwright && playwright install chromium")
     except Exception as e:
-        raise Exception(f"生成图片失败: {str(e)}")
+        raise Exception(f"Image generation failed: {str(e)}")
 
 
 if __name__ == '__main__':
-    # 测试代码
     import sys
     import io
 
-    # 修复 Windows 控制台编码问题
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-    print("测试 PSU 图片生成...")
+    print("Testing PSU image generation...")
 
     first_name = "John"
     last_name = "Smith"
 
-    print(f"姓名: {first_name} {last_name}")
+    print(f"Name: {first_name} {last_name}")
     print(f"PSU ID: {generate_psu_id()}")
-    print(f"邮箱: {generate_psu_email(first_name, last_name)}")
+    print(f"Email: {generate_psu_email(first_name, last_name)}")
 
     try:
         img_data = generate_image(first_name, last_name)
-
-        # 保存测试图片
         with open('test_psu_card.png', 'wb') as f:
             f.write(img_data)
-
-        print(f"✓ 图片生成成功! 大小: {len(img_data)} bytes")
-        print("✓ 已保存为 test_psu_card.png")
-
+        print(f"OK! Image size: {len(img_data)} bytes")
+        print("Saved as test_psu_card.png")
     except Exception as e:
-        print(f"✗ 错误: {e}")
+        print(f"Error: {e}")

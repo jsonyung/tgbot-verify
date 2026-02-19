@@ -686,41 +686,77 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE, db: 
                 return
 
             data = response.json()
-            current_step = data.get("currentStep")
+            current_step = data.get("currentStep", "unknown")
             reward_code = data.get("rewardCode") or data.get("rewardData", {}).get("rewardCode")
             redirect_url = data.get("redirectUrl")
+            rejection_reasons = data.get("rejectionReasons", [])
+            error_ids = data.get("errorIds", [])
+            segment = data.get("segment", "")
+            estimated_review = data.get("estimatedReviewTime", "")
+            max_review = data.get("maxReviewTime", "")
+            created_ts = data.get("created")
+            updated_ts = data.get("updated")
 
+            # -- Build the info block shown for all steps --
+            info_lines = []
+            info_lines.append(f"📌 Step / الخطوة: {current_step}")
+            if segment:
+                info_lines.append(f"👤 Segment / الفئة: {segment}")
+            if rejection_reasons:
+                reasons_str = ", ".join(rejection_reasons)
+                info_lines.append(f"🚫 Rejection / سبب الرفض: {reasons_str}")
+            if error_ids:
+                info_lines.append(f"⚠️ Errors / أخطاء: {', '.join(error_ids)}")
+            if estimated_review:
+                info_lines.append(f"⏱ Estimated review / وقت المراجعة: {estimated_review}")
+            if max_review:
+                info_lines.append(f"⏳ Max review / الحد الأقصى: {max_review}")
+            if created_ts:
+                from datetime import datetime, timezone
+                try:
+                    created_dt = datetime.fromtimestamp(created_ts / 1000, tz=timezone.utc)
+                    info_lines.append(f"📅 Created / أُنشئ: {created_dt.strftime('%Y-%m-%d %H:%M UTC')}")
+                except Exception:
+                    pass
+            if updated_ts:
+                try:
+                    updated_dt = datetime.fromtimestamp(updated_ts / 1000, tz=timezone.utc)
+                    info_lines.append(f"🔄 Updated / آخر تحديث: {updated_dt.strftime('%Y-%m-%d %H:%M UTC')}")
+                except Exception:
+                    pass
+
+            info_block = "\n".join(info_lines)
+
+            # -- Handle each step --
             if current_step == "success":
                 result_msg = "✅ Verification successful! / نجح التحقق!\n\n"
                 if redirect_url:
                     result_msg += f"🔗 Activation link / رابط التفعيل:\n{redirect_url}\n\n"
                 if reward_code:
-                    result_msg += f"🎁 Code / الكود: `{reward_code}`\n"
+                    result_msg += f"🎁 Code / الكود: `{reward_code}`\n\n"
                 if not redirect_url and not reward_code:
-                    result_msg += "✨ Approved but no link/code returned.\nتمت الموافقة ولكن لم يتم إرجاع رابط/كود."
+                    result_msg += "✨ Approved but no link/code returned.\nتمت الموافقة ولكن لم يتم إرجاع رابط/كود.\n\n"
+                result_msg += info_block
                 await processing_msg.edit_text(result_msg)
 
-            elif current_step == "pending":
-                await processing_msg.edit_text(
-                    "⏳ Verification still under review. Please try again later.\n"
-                    "التحقق لا يزال قيد المراجعة. يرجى المحاولة لاحقاً.\n\n"
-                    "Usually takes 1-5 minutes. / عادةً تستغرق 1-5 دقائق.\n\n"
-                    f"💡 Try again with / حاول مجدداً بـ:\n`/check {verification_id}`"
-                )
-
             elif current_step == "error":
-                error_ids = data.get("errorIds", [])
-                await processing_msg.edit_text(
-                    f"❌ Verification failed / فشل التحقق\n\n"
-                    f"Error / خطأ: {', '.join(error_ids) if error_ids else 'Unknown / غير معروف'}"
-                )
+                result_msg = "❌ Verification failed / فشل التحقق\n\n"
+                result_msg += info_block
+                await processing_msg.edit_text(result_msg)
 
             else:
-                await processing_msg.edit_text(
-                    f"⚠️ Current status / الحالة الحالية: {current_step}\n\n"
-                    "Not completed yet. Please try again later.\n"
-                    "لم تكتمل بعد. يرجى المحاولة لاحقاً."
+                # Covers: pending, docUpload, collectStudentPersonalInfo, etc.
+                if rejection_reasons:
+                    header = "⚠️ Verification has rejection flags / يوجد أسباب رفض:\n\n"
+                else:
+                    header = "⏳ Verification in progress / التحقق جارٍ\n\n"
+
+                result_msg = header + info_block
+                result_msg += (
+                    f"\n\n💡 Try again later / حاول لاحقاً:\n"
+                    f"`/check {verification_id}`"
                 )
+                await processing_msg.edit_text(result_msg)
 
     except Exception as e:
         logger.error("Check verification failed: %s", e)

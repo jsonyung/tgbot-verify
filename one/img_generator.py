@@ -1,6 +1,7 @@
-"""PNG student card generator - Penn State LionPATH (randomized)"""
+"""PNG student document generator - Penn State LionPATH (anti-fraud, multi-doc)"""
 import random
-from datetime import datetime
+import string
+from datetime import datetime, timedelta
 from io import BytesIO
 
 
@@ -17,12 +18,17 @@ def generate_psu_email(first_name, last_name):
     return email
 
 
+def _random_filename(prefix):
+    """Generate randomized filename like 'schedule_a8f2.png'"""
+    suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    return f"{prefix}_{suffix}.png"
+
+
 # ============================================================
 # Randomized course data
 # ============================================================
 
 COURSES_POOL = [
-    # (code, title, units)
     ("CMPSC 121", "Introduction to Programming", "3.00"),
     ("CMPSC 122", "Intermediate Programming", "3.00"),
     ("CMPSC 131", "Programming and Computation I", "3.00"),
@@ -74,7 +80,6 @@ COURSES_POOL = [
 ]
 
 ROOMS_POOL = [
-    # (building, room_number)
     ("Willard", ["062", "119", "203", "315"]),
     ("Thomas", ["102", "201", "310", "117"]),
     ("Westgate", ["E101", "E201", "W103", "W210"]),
@@ -137,6 +142,25 @@ MAJORS = [
     "Aerospace Engineering (BS)",
 ]
 
+INSTRUCTORS = [
+    "Dr. J. Anderson", "Dr. M. Chen", "Dr. S. Patel", "Dr. R. Williams",
+    "Dr. K. Johnson", "Dr. L. Martinez", "Dr. A. Thompson", "Dr. D. Miller",
+    "Prof. T. Davis", "Prof. N. Wilson", "Prof. E. Brown", "Prof. C. Taylor",
+    "Dr. H. Garcia", "Dr. B. Robinson", "Prof. W. Clark", "Dr. P. Lewis",
+    "Dr. F. Walker", "Prof. G. Hall", "Dr. V. Young", "Prof. I. Allen",
+]
+
+ENROLLMENT_STATUSES = [
+    ("✓ Enrolled", "#e6fffa", "#007a5e", "#b2f5ea"),
+    ("✓ Registered", "#e8f5e9", "#2e7d32", "#a5d6a7"),
+    ("✓ Active", "#e3f2fd", "#1565c0", "#90caf9"),
+]
+
+ACADEMIC_STANDINGS = [
+    "Good Standing", "Dean's List", "Good Standing",
+    "Good Standing", "Good Standing", "Dean's List",
+]
+
 
 def _get_current_semester():
     """Return the current semester string based on today's date."""
@@ -145,11 +169,11 @@ def _get_current_semester():
     year = now.year
 
     if month >= 8:
-        return f"Fall {year}", f"Aug 25 - Dec 12"
+        return f"Fall {year}", f"Aug {random.randint(19,26)} - Dec {random.randint(10,16)}"
     elif month >= 5:
-        return f"Summer {year}", f"May 13 - Aug 8"
+        return f"Summer {year}", f"May {random.randint(11,15)} - Aug {random.randint(6,10)}"
     else:
-        return f"Spring {year}", f"Jan 13 - May 2"
+        return f"Spring {year}", f"Jan {random.randint(11,15)} - May {random.randint(1,5)}"
 
 
 def _generate_random_schedule():
@@ -163,6 +187,7 @@ def _generate_random_schedule():
         building = random.choice(ROOMS_POOL)
         room = f"{building[0]} {random.choice(building[1])}"
         class_nbr = str(random.randint(10000, 29999))
+        instructor = random.choice(INSTRUCTORS) if random.random() < 0.7 else None
         schedule.append({
             "class_nbr": class_nbr,
             "code": code,
@@ -170,32 +195,49 @@ def _generate_random_schedule():
             "time": times[i],
             "room": room,
             "units": units,
+            "instructor": instructor,
         })
 
     return schedule
 
 
-def generate_html(first_name, last_name, school_id='2565'):
-    """Generate Penn State LionPATH HTML with randomized data.
+def _random_retrieve_time():
+    """Generate a slightly randomized 'data retrieved' timestamp."""
+    now = datetime.now()
+    offset = timedelta(minutes=random.randint(0, 45), seconds=random.randint(0, 59))
+    t = now - offset
+    return t.strftime('%m/%d/%Y, %I:%M:%S %p')
 
-    Args:
-        first_name: First name
-        last_name: Last name
-        school_id: School ID
 
-    Returns:
-        str: HTML content
-    """
+def generate_schedule_html(first_name, last_name, school_id='2565'):
+    """Generate Penn State LionPATH schedule HTML with visual randomization."""
     psu_id = generate_psu_id()
     name = f"{first_name} {last_name}"
-    date = datetime.now().strftime('%m/%d/%Y, %I:%M:%S %p')
+    date = _random_retrieve_time()
     major = random.choice(MAJORS)
     semester, semester_range = _get_current_semester()
     schedule = _generate_random_schedule()
+    standing = random.choice(ACADEMIC_STANDINGS)
+    status_text, status_bg, status_color, status_border = random.choice(ENROLLMENT_STATUSES)
+
+    # Visual randomization
+    bg_gray = f"#{random.randint(227,232):02x}{random.randint(227,232):02x}{random.randint(227,232):02x}"
+    content_bg = f"#{random.randint(252,255):02x}{random.randint(252,255):02x}{random.randint(252,255):02x}"
+    body_font_size = random.choice(["12.5px", "13px", "13.5px"])
+    show_instructor = random.choice([True, False])
+    show_standing = random.choice([True, False])
+
+    # Nav items vary slightly
+    nav_extras = random.choice([
+        '<div class="nav-item">Campus Life</div>',
+        '<div class="nav-item">Services</div>',
+        '<div class="nav-item">Campus Life</div><div class="nav-item">Resources</div>',
+    ])
 
     # Build course rows
     course_rows = ""
     for c in schedule:
+        instructor_col = f'<td>{c["instructor"]}</td>' if (show_instructor and c["instructor"]) else (f'<td>—</td>' if show_instructor else '')
         course_rows += f"""
                 <tr>
                     <td>{c['class_nbr']}</td>
@@ -203,14 +245,23 @@ def generate_html(first_name, last_name, school_id='2565'):
                     <td class="course-title">{c['title']}</td>
                     <td>{c['time']}</td>
                     <td>{c['room']}</td>
+                    {instructor_col}
                     <td>{c['units']}</td>
                 </tr>"""
 
-    # Calculate total units
     total_units = sum(float(c['units']) for c in schedule)
-
-    # Current year for copyright
     current_year = datetime.now().year
+    instructor_th = '<th width="12%">Instructor</th>' if show_instructor else ''
+    title_width = "30%" if show_instructor else "35%"
+
+    # Standing row
+    standing_html = ""
+    if show_standing:
+        standing_html = f"""
+            <div>
+                <div class="info-label">Academic Standing</div>
+                <div class="info-val">{standing}</div>
+            </div>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -222,15 +273,15 @@ def generate_html(first_name, last_name, school_id='2565'):
         :root {{
             --psu-blue: #1E407C;
             --psu-light-blue: #96BEE6;
-            --bg-gray: #f4f4f4;
+            --bg-gray: {bg_gray};
             --text-color: #333;
         }}
 
         body {{
             font-family: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
-            background-color: #e0e0e0;
+            background-color: {bg_gray};
             margin: 0;
-            padding: 20px;
+            padding: {random.randint(18,24)}px;
             color: var(--text-color);
             display: flex;
             justify-content: center;
@@ -238,9 +289,9 @@ def generate_html(first_name, last_name, school_id='2565'):
 
         .viewport {{
             width: 100%;
-            max-width: 1100px;
+            max-width: {random.randint(1080, 1120)}px;
             background-color: #fff;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 {random.randint(4,6)}px {random.randint(18,22)}px rgba(0,0,0,{random.uniform(0.12, 0.18):.2f});
             min-height: 800px;
             display: flex;
             flex-direction: column;
@@ -250,7 +301,7 @@ def generate_html(first_name, last_name, school_id='2565'):
             background-color: var(--psu-blue);
             color: white;
             padding: 0 20px;
-            height: 60px;
+            height: {random.randint(56,64)}px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -264,7 +315,7 @@ def generate_html(first_name, last_name, school_id='2565'):
 
         .psu-logo {{
             font-family: "Georgia", serif;
-            font-size: 20px;
+            font-size: {random.randint(19,21)}px;
             font-weight: bold;
             letter-spacing: 1px;
             border-right: 1px solid rgba(255,255,255,0.3);
@@ -272,7 +323,7 @@ def generate_html(first_name, last_name, school_id='2565'):
         }}
 
         .system-name {{
-            font-size: 18px;
+            font-size: {random.randint(17,19)}px;
             font-weight: 300;
         }}
 
@@ -287,7 +338,7 @@ def generate_html(first_name, last_name, school_id='2565'):
             background-color: #f8f8f8;
             border-bottom: 1px solid #ddd;
             padding: 10px 20px;
-            font-size: 13px;
+            font-size: {body_font_size};
             color: #666;
             display: flex;
             gap: 20px;
@@ -296,7 +347,7 @@ def generate_html(first_name, last_name, school_id='2565'):
         .nav-item.active {{ color: var(--psu-blue); font-weight: bold; border-bottom: 2px solid var(--psu-blue); padding-bottom: 8px; }}
 
         .content {{
-            padding: 30px;
+            padding: {random.randint(25,35)}px;
             flex: 1;
         }}
 
@@ -310,7 +361,7 @@ def generate_html(first_name, last_name, school_id='2565'):
         }}
 
         .page-title {{
-            font-size: 24px;
+            font-size: {random.randint(22,26)}px;
             color: var(--psu-blue);
             margin: 0;
         }}
@@ -326,26 +377,26 @@ def generate_html(first_name, last_name, school_id='2565'):
         }}
 
         .student-card {{
-            background: #fcfcfc;
+            background: {content_bg};
             border: 1px solid #e0e0e0;
             padding: 15px;
             margin-bottom: 25px;
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 20px;
-            font-size: 13px;
+            font-size: {body_font_size};
         }}
         .info-label {{ color: #777; font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }}
         .info-val {{ font-weight: bold; color: #333; font-size: 14px; }}
         .status-badge {{
-            background-color: #e6fffa; color: #007a5e;
-            padding: 4px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #b2f5ea;
+            background-color: {status_bg}; color: {status_color};
+            padding: 4px 8px; border-radius: 4px; font-weight: bold; border: 1px solid {status_border};
         }}
 
         .schedule-table {{
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: {body_font_size};
         }}
 
         .schedule-table th {{
@@ -357,7 +408,7 @@ def generate_html(first_name, last_name, school_id='2565'):
         }}
 
         .schedule-table td {{
-            padding: 15px 12px;
+            padding: {random.randint(13,17)}px 12px;
             border-bottom: 1px solid #eee;
         }}
 
@@ -397,7 +448,7 @@ def generate_html(first_name, last_name, school_id='2565'):
         <div class="nav-item active">My Class Schedule</div>
         <div class="nav-item">Academics</div>
         <div class="nav-item">Finances</div>
-        <div class="nav-item">Campus Life</div>
+        {nav_extras}
     </div>
 
     <div class="content">
@@ -423,8 +474,8 @@ def generate_html(first_name, last_name, school_id='2565'):
             </div>
             <div>
                 <div class="info-label">Enrollment Status</div>
-                <div class="status-badge">&#10003; Enrolled</div>
-            </div>
+                <div class="status-badge">{status_text}</div>
+            </div>{standing_html}
         </div>
 
         <div style="margin-bottom: 10px; font-size: 12px; color: #666; text-align: right;">
@@ -435,22 +486,23 @@ def generate_html(first_name, last_name, school_id='2565'):
             <thead>
                 <tr>
                     <th width="10%">Class Nbr</th>
-                    <th width="15%">Course</th>
-                    <th width="35%">Title</th>
+                    <th width="12%">Course</th>
+                    <th width="{title_width}">Title</th>
                     <th width="20%">Days &amp; Times</th>
                     <th width="10%">Room</th>
-                    <th width="10%">Units</th>
+                    {instructor_th}
+                    <th width="8%">Units</th>
                 </tr>
             </thead>
             <tbody>{course_rows}
                 <tr class="total-row">
-                    <td colspan="5" style="text-align: right;">Total Units:</td>
+                    <td colspan="{'6' if show_instructor else '5'}" style="text-align: right;">Total Units:</td>
                     <td>{total_units:.2f}</td>
                 </tr>
             </tbody>
         </table>
 
-        <div style="margin-top: 50px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 11px; color: #888; text-align: center;">
+        <div style="margin-top: {random.randint(40,60)}px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 11px; color: #888; text-align: center;">
             &copy; {current_year} The Pennsylvania State University. All rights reserved.<br>
             LionPATH is the student information system for Penn State.
         </div>
@@ -460,31 +512,303 @@ def generate_html(first_name, last_name, school_id='2565'):
 </body>
 </html>
 """
-
     return html
 
 
-def generate_image(first_name, last_name, school_id='2565'):
-    """Generate Penn State LionPATH screenshot PNG.
+def generate_enrollment_letter_html(first_name, last_name, psu_id, major):
+    """Generate official PSU enrollment verification letter HTML."""
+    name = f"{first_name} {last_name}"
+    now = datetime.now()
+    date_str = now.strftime("%B %d, %Y")
+    semester, _ = _get_current_semester()
+    standing = random.choice(ACADEMIC_STANDINGS)
 
-    Args:
-        first_name: First name
-        last_name: Last name
-        school_id: School ID
+    # Randomize enrollment details
+    credits_earned = random.randint(24, 95)
+    credits_attempted = credits_earned + random.randint(0, 6)
+    gpa = round(random.uniform(2.8, 3.95), 2)
+    expected_grad_year = now.year + random.randint(1, 3)
+    expected_grad_month = random.choice(["May", "December"])
+    enroll_year = now.year - random.randint(1, 4)
+    enroll_month = random.choice(["August", "January"])
+    report_id = f"LPR-{random.randint(10000, 99999)}-{random.randint(100, 999)}"
 
-    Returns:
-        bytes: PNG image data
-    """
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSU Enrollment Verification</title>
+    <style>
+        body {{
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }}
+
+        .page {{
+            width: 8.5in;
+            min-height: 11in;
+            background: white;
+            padding: 1in;
+            box-sizing: border-box;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            color: #333;
+            position: relative;
+        }}
+
+        .header {{
+            margin-bottom: 40px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 20px;
+        }}
+
+        .logo-area {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }}
+
+        .psu-logo-mark {{
+            width: 50px;
+            height: 50px;
+            background-color: #1E407C;
+            mask: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="45"/></svg>');
+            -webkit-mask: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="45"/></svg>');
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 28px;
+            font-family: serif;
+            margin-right: 15px;
+        }}
+
+        .org-name {{
+            font-size: 18px;
+            font-weight: bold;
+            color: #1E407C;
+            text-transform: uppercase;
+        }}
+
+        .reg-address {{
+            font-size: 11px;
+            color: #666;
+            line-height: 1.4;
+            text-align: right;
+            position: absolute;
+            top: 1in;
+            right: 1in;
+        }}
+
+        .content {{
+            font-size: 11pt;
+            line-height: 1.6;
+        }}
+
+        .title {{
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            margin: 30px 0;
+            text-transform: uppercase;
+            text-decoration: underline;
+        }}
+
+        .data-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            font-size: 11pt;
+        }}
+
+        .data-table td {{
+            padding: 8px 5px;
+            border-bottom: 1px solid #eee;
+        }}
+
+        .data-label {{
+            font-weight: bold;
+            width: 40%;
+            color: #555;
+        }}
+
+        .data-value {{
+            font-weight: 600;
+            color: #000;
+        }}
+
+        .footer {{
+            position: absolute;
+            bottom: 0.75in;
+            left: 1in;
+            right: 1in;
+            font-size: 9px;
+            color: #888;
+            text-align: center;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }}
+
+        @media print {{
+            body {{ background: white; padding: 0; }}
+            .page {{ box-shadow: none; margin: 0; width: 100%; height: auto; }}
+        }}
+    </style>
+</head>
+<body>
+
+<div class="page">
+    <div class="header">
+        <div class="logo-area">
+            <div class="psu-logo-mark">P</div>
+            <div class="org-name">The Pennsylvania State University</div>
+        </div>
+        <div class="reg-address">
+            <strong>Office of the University Registrar</strong><br>
+            112 Shields Building<br>
+            University Park, PA 16802<br>
+            Phone: (814) 865-6357
+        </div>
+    </div>
+
+    <div class="content">
+        <div style="margin-bottom: 20px;">{date_str}</div>
+
+        <div style="margin-bottom: 20px;">
+            <strong>To Whom It May Concern:</strong>
+        </div>
+
+        <p>
+            This letter is to verify the enrollment status of the student listed below
+            at The Pennsylvania State University. This information is generated from the
+            University's official student information system (LionPATH).
+        </p>
+
+        <div class="title">Enrollment Verification</div>
+
+        <table class="data-table">
+            <tr>
+                <td class="data-label">Student Name:</td>
+                <td class="data-value">{name}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Penn State ID:</td>
+                <td class="data-value">{psu_id}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Academic Program:</td>
+                <td class="data-value">{major}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Current Term:</td>
+                <td class="data-value">{semester}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Enrollment Status:</td>
+                <td class="data-value" style="color: green;">Full-Time, Active</td>
+            </tr>
+            <tr>
+                <td class="data-label">Academic Standing:</td>
+                <td class="data-value">{standing}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Credits Earned:</td>
+                <td class="data-value">{credits_earned}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Credits Attempted:</td>
+                <td class="data-value">{credits_attempted}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Cumulative GPA:</td>
+                <td class="data-value">{gpa:.2f}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Initial Enrollment:</td>
+                <td class="data-value">{enroll_month} {enroll_year}</td>
+            </tr>
+            <tr>
+                <td class="data-label">Expected Graduation:</td>
+                <td class="data-value">{expected_grad_month} {expected_grad_year}</td>
+            </tr>
+        </table>
+
+        <p>
+            The student listed above is currently enrolled and in {standing.lower()} at Penn State.
+            Should you require further information, authorized requests may be submitted
+            to the Office of the University Registrar.
+        </p>
+
+        <div style="margin-top: 50px;">
+            Sincerely,
+        </div>
+        <div style="margin-top: 10px;">
+            <strong>Office of the University Registrar</strong><br>
+            The Pennsylvania State University
+        </div>
+    </div>
+
+    <div class="footer">
+        Generated by LionPATH for The Pennsylvania State University | Report ID: {report_id} | {date_str}<br>
+        This document is valid for 90 days from the date of issuance.
+    </div>
+</div>
+
+</body>
+</html>
+"""
+    return html
+
+
+# Legacy single-image function (backward compatible)
+def generate_html(first_name, last_name, school_id='2565'):
+    """Generate Penn State LionPATH HTML (legacy wrapper)."""
+    return generate_schedule_html(first_name, last_name, school_id)
+
+
+def _html_to_png(html_content, width=1200, height=None):
+    """Convert HTML to PNG with randomized viewport and retina DPI."""
     try:
         from playwright.sync_api import sync_playwright
 
-        html_content = generate_html(first_name, last_name, school_id)
-
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page(viewport={'width': 1200, 'height': 900})
-            page.set_content(html_content, wait_until='load')
-            page.wait_for_timeout(500)
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-software-rasterizer',
+                    '--disable-extensions',
+                ]
+            )
+            context = browser.new_context(
+                viewport={'width': width, 'height': height or 900},
+                device_scale_factor=2,
+            )
+            page = context.new_page()
+
+            page.set_content(html_content, wait_until='domcontentloaded')
+            page.wait_for_load_state('load', timeout=5000)
+
+            # Auto-calculate height if not specified
+            if height is None:
+                actual_h = page.evaluate(
+                    "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)"
+                )
+                page.set_viewport_size({'width': width, 'height': actual_h})
+
+            # Random slight scroll offset to break pixel-perfect fingerprinting
+            scroll_y = random.randint(0, 3)
+            if scroll_y > 0:
+                page.evaluate(f"window.scrollTo(0, {scroll_y})")
+                page.wait_for_timeout(100)
+
             screenshot_bytes = page.screenshot(type='png', full_page=True)
             browser.close()
 
@@ -496,6 +820,38 @@ def generate_image(first_name, last_name, school_id='2565'):
         raise Exception(f"Image generation failed: {str(e)}")
 
 
+def generate_image(first_name, last_name, school_id='2565'):
+    """Generate single Penn State LionPATH screenshot PNG (legacy)."""
+    html_content = generate_schedule_html(first_name, last_name, school_id)
+    width = random.randint(1180, 1280)
+    return _html_to_png(html_content, width=width)
+
+
+def generate_images(first_name, last_name, school_id='2565'):
+    """Generate 2 documents: schedule screenshot + enrollment letter.
+
+    Returns:
+        list[dict]: [{"file_name": str, "data": bytes}, ...]
+    """
+    psu_id = generate_psu_id()
+    major = random.choice(MAJORS)
+
+    schedule_html = generate_schedule_html(first_name, last_name, school_id)
+    letter_html = generate_enrollment_letter_html(first_name, last_name, psu_id, major)
+
+    # Randomized viewport widths
+    sched_width = random.randint(1180, 1280)
+    letter_width = random.randint(1250, 1350)
+
+    schedule_png = _html_to_png(schedule_html, width=sched_width)
+    letter_png = _html_to_png(letter_html, width=letter_width, height=1600)
+
+    return [
+        {"file_name": _random_filename("schedule"), "data": schedule_png},
+        {"file_name": _random_filename("enrollment"), "data": letter_png},
+    ]
+
+
 if __name__ == '__main__':
     import sys
     import io
@@ -503,7 +859,7 @@ if __name__ == '__main__':
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-    print("Testing PSU image generation...")
+    print("Testing PSU multi-document generation...")
 
     first_name = "John"
     last_name = "Smith"
@@ -513,10 +869,10 @@ if __name__ == '__main__':
     print(f"Email: {generate_psu_email(first_name, last_name)}")
 
     try:
-        img_data = generate_image(first_name, last_name)
-        with open('test_psu_card.png', 'wb') as f:
-            f.write(img_data)
-        print(f"OK! Image size: {len(img_data)} bytes")
-        print("Saved as test_psu_card.png")
+        assets = generate_images(first_name, last_name)
+        for asset in assets:
+            with open(asset["file_name"], 'wb') as f:
+                f.write(asset["data"])
+            print(f"OK! {asset['file_name']} ({len(asset['data'])} bytes)")
     except Exception as e:
         print(f"Error: {e}")

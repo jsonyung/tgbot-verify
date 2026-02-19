@@ -69,10 +69,17 @@ class NameGenerator:
 
         last_name = random.choice(LAST_NAMES)
 
+        # 50% chance of middle initial
+        if random.random() < 0.5:
+            middle_initial = random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            full_name = f"{first_name} {middle_initial}. {last_name}"
+        else:
+            full_name = f"{first_name} {last_name}"
+
         return {
             "first_name": first_name,
             "last_name": last_name,
-            "full_name": f"{first_name} {last_name}",
+            "full_name": full_name,
         }
 
 

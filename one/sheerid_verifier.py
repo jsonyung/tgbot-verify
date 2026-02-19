@@ -7,7 +7,7 @@ from typing import Dict, Optional, Tuple
 
 from . import config
 from .name_generator import NameGenerator, generate_birth_date
-from .img_generator import generate_image, generate_psu_email
+from .img_generator import generate_images, generate_psu_email
 
 # 配置日志
 logging.basicConfig(
@@ -111,11 +111,11 @@ class SheerIDVerifier:
             logger.info(f"生日: {birth_date}")
             logger.info(f"验证 ID: {self.verification_id}")
 
-            # 生成学生证 PNG
-            logger.info("步骤 1/4: 生成学生证 PNG...")
-            img_data = generate_image(first_name, last_name, school_id)
-            file_size = len(img_data)
-            logger.info(f"✅ PNG 大小: {file_size / 1024:.2f}KB")
+            # 生成两份文档 (class schedule + enrollment letter)
+            logger.info("步骤 1/4: 生成学生文档 (2 份)...")
+            assets = generate_images(first_name, last_name, school_id)
+            for asset in assets:
+                logger.info(f"  ✅ {asset['file_name']} ({len(asset['data']) / 1024:.1f}KB)")
 
             # 提交学生信息
             logger.info("步骤 2/4: 提交学生信息...")
@@ -166,13 +166,14 @@ class SheerIDVerifier:
                 logger.info(f"✅ 步骤 3 完成: {step3_data.get('currentStep')}")
                 current_step = step3_data.get("currentStep", current_step)
 
-            # 上传文档并完成提交
-            logger.info("步骤 4/4: 请求并上传文档...")
-            step4_body = {
-                "files": [
-                    {"fileName": "student_card.png", "mimeType": "image/png", "fileSize": file_size}
-                ]
-            }
+            # 上传文档并完成提交 (2 份)
+            logger.info("步骤 4/4: 请求上传链接 & 上传文档...")
+            files_payload = [
+                {"fileName": asset["file_name"], "mimeType": "image/png", "fileSize": len(asset["data"])}
+                for asset in assets
+            ]
+            step4_body = {"files": files_payload}
+
             step4_data, step4_status = self._sheerid_request(
                 "POST",
                 f"{config.SHEERID_BASE_URL}/rest/v2/verification/{self.verification_id}/step/docUpload",
@@ -181,11 +182,13 @@ class SheerIDVerifier:
             if not step4_data.get("documents"):
                 raise Exception("未能获取上传 URL")
 
-            upload_url = step4_data["documents"][0]["uploadUrl"]
-            logger.info("✅ 获取上传 URL 成功")
-            if not self._upload_to_s3(upload_url, img_data):
-                raise Exception("S3 上传失败")
-            logger.info("✅ 学生证上传成功")
+            # Upload each document to S3
+            for i, doc in enumerate(step4_data["documents"]):
+                upload_url = doc["uploadUrl"]
+                logger.info(f"  📤 上传文档 {i+1}/{len(assets)}: {assets[i]['file_name']}")
+                if not self._upload_to_s3(upload_url, assets[i]["data"]):
+                    raise Exception(f"S3 上传失败: {assets[i]['file_name']}")
+                logger.info(f"  ✅ 文档 {i+1} 上传成功")
 
             step6_data, _ = self._sheerid_request(
                 "POST",

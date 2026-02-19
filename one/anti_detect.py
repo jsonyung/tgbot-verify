@@ -17,7 +17,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ===================== CONFIG =====================
-PROXY_URL = os.environ.get("PROXY_URL", "")  # e.g. http://user:pass@host:port
+# Single proxy or multiple proxies separated by | (pipe)
+# Format: host:port:user:pass  or  http://user:pass@host:port
+# Example: 1.2.3.4:6000:user:pass|5.6.7.8:7000:user:pass
+PROXY_URL = os.environ.get("PROXY_URL", "")
+
+
+def get_random_proxy() -> str | None:
+    """Pick a random proxy from PROXY_URL (supports multiple, separated by |)."""
+    if not PROXY_URL:
+        return None
+    proxies = [p.strip() for p in PROXY_URL.split("|") if p.strip()]
+    if not proxies:
+        return None
+    return random.choice(proxies)
 
 # ===================== CHROME VERSIONS =====================
 IMPERSONATE_OPTIONS = {
@@ -180,7 +193,7 @@ def create_session(proxy: str = None):
     Returns:
         tuple: (session, library_name)
     """
-    proxy = _format_proxy(proxy or PROXY_URL)
+    proxy = _format_proxy(proxy or get_random_proxy())
     proxies = None
     if proxy:
         proxies = {"http": proxy, "https": proxy, "all://": proxy}

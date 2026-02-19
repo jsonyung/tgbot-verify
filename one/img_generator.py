@@ -1,8 +1,64 @@
 """PNG student document generator - Penn State LionPATH (anti-fraud, multi-doc)"""
 import random
 import string
+import numpy as np
 from datetime import datetime, timedelta
 from io import BytesIO
+from PIL import Image, ImageFilter, ImageEnhance
+
+
+def _postprocess_image(png_bytes: bytes) -> bytes:
+    """Post-process screenshot to look like a real photo/scan.
+
+    Applies: slight rotation, Gaussian noise, subtle blur,
+    brightness/contrast variation, JPEG compression artifacts,
+    and random crop margins.
+    """
+    img = Image.open(BytesIO(png_bytes)).convert('RGB')
+
+    # 1. Slight random rotation (simulates non-aligned photo)
+    angle = random.uniform(-1.2, 1.2)
+    if abs(angle) > 0.3:
+        img = img.rotate(angle, resample=Image.BICUBIC, expand=True, fillcolor=(255, 255, 255))
+
+    # 2. Random crop margins (simulates imperfect framing)
+    w, h = img.size
+    crop_left = random.randint(0, 8)
+    crop_top = random.randint(0, 8)
+    crop_right = random.randint(0, 8)
+    crop_bottom = random.randint(0, 8)
+    img = img.crop((crop_left, crop_top, w - crop_right, h - crop_bottom))
+
+    # 3. Add Gaussian noise (simulates camera sensor noise)
+    arr = np.array(img, dtype=np.float32)
+    noise_strength = random.uniform(1.5, 4.0)
+    noise = np.random.normal(0, noise_strength, arr.shape)
+    arr = np.clip(arr + noise, 0, 255).astype(np.uint8)
+    img = Image.fromarray(arr)
+
+    # 4. Subtle Gaussian blur (simulates slight camera defocus)
+    blur_radius = random.uniform(0.2, 0.6)
+    img = img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+
+    # 5. Random brightness & contrast variation
+    brightness_factor = random.uniform(0.95, 1.05)
+    img = ImageEnhance.Brightness(img).enhance(brightness_factor)
+
+    contrast_factor = random.uniform(0.95, 1.05)
+    img = ImageEnhance.Contrast(img).enhance(contrast_factor)
+
+    # 6. JPEG compression artifacts then back to PNG
+    # (simulates image saved/shared through messaging apps)
+    jpeg_quality = random.randint(82, 92)
+    jpeg_buf = BytesIO()
+    img.save(jpeg_buf, format='JPEG', quality=jpeg_quality)
+    jpeg_buf.seek(0)
+    img = Image.open(jpeg_buf)
+
+    # 7. Final export as PNG
+    out_buf = BytesIO()
+    img.save(out_buf, format='PNG')
+    return out_buf.getvalue()
 
 
 def generate_psu_id():
@@ -812,7 +868,8 @@ def _html_to_png(html_content, width=1200, height=None):
             screenshot_bytes = page.screenshot(type='png', full_page=True)
             browser.close()
 
-        return screenshot_bytes
+        # Post-process to simulate real photo
+        return _postprocess_image(screenshot_bytes)
 
     except ImportError:
         raise Exception("Playwright required: pip install playwright && playwright install chromium")

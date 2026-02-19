@@ -1,13 +1,20 @@
-"""SheerID 学生验证主程序"""
+"""SheerID 学生验证主程序 — with anti-detection"""
 import re
 import random
 import logging
-import httpx
+import time
 from typing import Dict, Optional, Tuple
 
 from . import config
 from .name_generator import NameGenerator, generate_birth_date
 from .img_generator import generate_images, generate_psu_email
+from .anti_detect import (
+    get_sheerid_headers,
+    generate_fingerprint,
+    create_session,
+    warm_session,
+    human_delay,
+)
 
 # 配置日志
 logging.basicConfig(
@@ -19,21 +26,22 @@ logger = logging.getLogger(__name__)
 
 
 class SheerIDVerifier:
-    """SheerID 学生身份验证器"""
+    """SheerID 学生身份验证器 (anti-detect enhanced)"""
 
-    def __init__(self, verification_id: str):
+    def __init__(self, verification_id: str, proxy: str = None):
         self.verification_id = verification_id
-        self.device_fingerprint = self._generate_device_fingerprint()
-        self.http_client = httpx.Client(timeout=30.0)
+        self.device_fingerprint = generate_fingerprint()
+
+        # Create anti-detect session (curl_cffi > httpx > requests)
+        self.http_client, self.lib_name = create_session(proxy)
+        logger.info(f"HTTP library: {self.lib_name}")
+
+        # Warm up session (simulate browser page load)
+        warm_session(self.http_client, config.PROGRAM_ID)
 
     def __del__(self):
-        if hasattr(self, "http_client"):
+        if hasattr(self, "http_client") and hasattr(self.http_client, "close"):
             self.http_client.close()
-
-    @staticmethod
-    def _generate_device_fingerprint() -> str:
-        chars = '0123456789abcdef'
-        return ''.join(random.choice(chars) for _ in range(32))
 
     @staticmethod
     def normalize_url(url: str) -> str:
@@ -50,19 +58,28 @@ class SheerIDVerifier:
     def _sheerid_request(
         self, method: str, url: str, body: Optional[Dict] = None
     ) -> Tuple[Dict, int]:
-        """发送 SheerID API 请求"""
-        headers = {
-            "Content-Type": "application/json",
-        }
+        """发送 SheerID API 请求 — with browser-like headers + delays"""
+        headers = get_sheerid_headers()
+
+        # Human-like delay between requests
+        human_delay(300, 800)
 
         try:
-            response = self.http_client.request(
-                method=method, url=url, json=body, headers=headers
-            )
+            # Different libraries use different kwarg names
+            try:
+                response = self.http_client.request(
+                    method=method, url=url, json=body, headers=headers
+                )
+            except TypeError:
+                # Some curl_cffi versions need positional args
+                response = self.http_client.request(
+                    method, url, json=body, headers=headers
+                )
+
             try:
                 data = response.json()
             except Exception:
-                data = response.text
+                data = response.text if hasattr(response, 'text') else str(response)
             return data, response.status_code
         except Exception as e:
             logger.error(f"SheerID 请求失败: {e}")
@@ -70,15 +87,26 @@ class SheerIDVerifier:
 
     def _upload_to_s3(self, upload_url: str, img_data: bytes) -> bool:
         """上传 PNG 到 S3"""
-        try:
-            headers = {"Content-Type": "image/png"}
-            response = self.http_client.put(
-                upload_url, content=img_data, headers=headers, timeout=60.0
-            )
-            return 200 <= response.status_code < 300
-        except Exception as e:
-            logger.error(f"S3 上传失败: {e}")
-            return False
+        attempts = [
+            lambda: self.http_client.put(upload_url, content=img_data, headers={"Content-Type": "image/png"}, timeout=60),
+            lambda: self.http_client.put(upload_url, data=img_data, headers={"Content-Type": "image/png"}, timeout=60),
+            lambda: self.http_client.request("PUT", upload_url, data=img_data, headers={"Content-Type": "image/png"}, timeout=60),
+        ]
+
+        for fn in attempts:
+            try:
+                resp = fn()
+                if hasattr(resp, "status_code") and 200 <= resp.status_code < 300:
+                    return True
+                elif hasattr(resp, "status_code"):
+                    logger.warning(f"S3 upload HTTP {resp.status_code}")
+                    return False
+            except TypeError:
+                continue
+            except Exception as e:
+                logger.error(f"S3 上传失败: {e}")
+                return False
+        return False
 
     def verify(
         self,

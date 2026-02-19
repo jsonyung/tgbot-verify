@@ -48,6 +48,8 @@ services:
       - MYSQL_USER=${MYSQL_USER:-tgbot_user}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE:-tgbot_verify}
+      # Proxy for SheerID (residential recommended)
+      - PROXY_URL=${PROXY_URL:-}
     volumes:
       - ./logs:/app/logs
     logging:

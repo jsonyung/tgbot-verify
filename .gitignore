@@ -75,3 +75,6 @@ Thumbs.db
 *.swp
 test_*.png
 test_*.pdf
+
+# Reference repos
+MooMoo_ref/

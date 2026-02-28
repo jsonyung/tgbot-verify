@@ -1,8 +1,13 @@
-"""Anti-detection module for SheerID API requests.
+"""
+Advanced Anti-Detection Module for SheerID API Requests.
 
-Provides browser-like headers, NewRelic tracking, TLS fingerprint
-spoofing (via curl_cffi), dynamic fingerprints, human-like delays,
-session warmup, and proxy support.
+Features:
+- Dynamic & Randomized Browser Impersonation (Chrome, Edge, Safari).
+- Perfectly matched User-Agent and sec-ch-ua headers.
+- Advanced "human-like" delays using Gamma distribution.
+- Enhanced, more unique device fingerprinting.
+- Robust proxy support for IP rotation.
+- NewRelic tracking headers to mimic JS agent.
 """
 
 import os
@@ -16,102 +21,82 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ===================== CONFIG =====================
-# Single proxy or multiple proxies separated by | (pipe)
-# Format: host:port:user:pass  or  http://user:pass@host:port
-# Example: 1.2.3.4:6000:user:pass|5.6.7.8:7000:user:pass
-PROXY_URL = os.environ.get("PROXY_URL", "")
-
+# ===================== PROXY CONFIG =====================
+# To use, set PROXY_URL in your .env file.
+# Format: host:port:user:pass or http://user:pass@host:port
+# For multiple, separate with |: proxy1|proxy2
+PROXY_URL = os.environ.get("PROXY_URL", "" )
 
 def get_random_proxy() -> str | None:
-    """Pick a random proxy from PROXY_URL (supports multiple, separated by |)."""
+    """Picks a random proxy from the PROXY_URL environment variable."""
     if not PROXY_URL:
         return None
     proxies = [p.strip() for p in PROXY_URL.split("|") if p.strip()]
-    if not proxies:
-        return None
-    return random.choice(proxies)
+    return random.choice(proxies) if proxies else None
 
-# ===================== CHROME VERSIONS =====================
-IMPERSONATE_OPTIONS = {
-    "chrome": ["chrome131", "chrome130", "chrome124", "chrome120"],
-    "edge": ["edge131", "edge127", "edge101"],
-    "safari": ["safari18", "safari17_2_ios", "safari17_0"],
-}
-DEFAULT_IMPERSONATE = "chrome131"
-
-# ===================== USER AGENTS =====================
-USER_AGENTS = [
-    # Chrome 131
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    # Chrome 130
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    # Chrome 131 Linux
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    # Edge 131
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+# ===================== DYNAMIC BROWSER PROFILES =====================
+# SOLUTION: Instead of a static profile, we create a list of complete, consistent browser profiles.
+# The bot will randomly pick one of these for each verification attempt.
+BROWSER_PROFILES = [
+    {
+        "impersonate": "chrome131",
+        "platform": '"Windows"',
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "sec_ch_ua": '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"',
+    },
+    {
+        "impersonate": "chrome131",
+        "platform": '"macOS"',
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "sec_ch_ua": '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"',
+    },
+    {
+        "impersonate": "edge131",
+        "platform": '"Windows"',
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.2259.170",
+        "sec_ch_ua": '"Microsoft Edge";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    },
+    {
+        "impersonate": "chrome124",
+        "platform": '"Windows"',
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    },
+    {
+        "impersonate": "safari17_2",
+        "platform": '"macOS"',
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
+        "sec_ch_ua": None, # Safari doesn't send sec-ch-ua
+    },
 ]
 
-# ===================== PLATFORMS (sec-ch-ua) =====================
-PLATFORMS = [
-    ("Windows", '"Windows"', '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"'),
-    ("Windows", '"Windows"', '"Chromium";v="130", "Google Chrome";v="130", "Not_A Brand";v="24"'),
-    ("macOS", '"macOS"', '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"'),
-    ("Linux", '"Linux"', '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"'),
-]
+LANGUAGES = ["en-US,en;q=0.9", "en-GB,en;q=0.9,en-US;q=0.8", "en-CA,en;q=0.9,en;q=0.8"]
+RESOLUTIONS = ["1920x1080", "1536x864", "1440x900", "2560x1440", "1600x900"]
 
-LANGUAGES = [
-    "en-US,en;q=0.9",
-    "en-US,en;q=0.9,es;q=0.8",
-    "en-GB,en;q=0.9",
-    "en-CA,en;q=0.9",
-]
-
-RESOLUTIONS = [
-    "1920x1080", "1366x768", "1536x864", "1440x900",
-    "1280x720", "2560x1440", "1600x900",
-]
-
-
-# ===================== FINGERPRINT =====================
+# ===================== FINGERPRINTING =====================
 def generate_fingerprint() -> str:
-    """Generate realistic browser fingerprint hash."""
+    """Generates a more realistic and randomized browser fingerprint hash."""
     components = [
-        str(int(time.time() * 1000)),
-        str(random.random()),
-        random.choice(RESOLUTIONS),
-        str(random.choice([-8, -7, -6, -5, -4, 0, 1, 2])),
+        str(int(time.time() * 1000)), str(random.random()),
+        random.choice(RESOLUTIONS), str(random.choice([-8, -7, -6, -5, -4])),
         random.choice(LANGUAGES).split(",")[0],
         random.choice(["Win32", "MacIntel", "Linux x86_64"]),
-        random.choice(["Google Inc.", "Apple Computer, Inc.", ""]),
-        str(random.randint(2, 16)),   # CPU cores
-        str(random.randint(4, 32)),   # device memory
-        str(random.randint(0, 1)),    # touch support
-        str(uuid.uuid4()),
+        random.choice(["Google Inc.", "Apple Computer, Inc.", ""]), # vendor
+        str(2**random.randint(1, 5)),  # CPU cores (2, 4, 8, 16, 32)
+        str(2**random.randint(2, 6)),  # device memory (4, 8, 16, 32, 64)
+        str(random.randint(0, 1)), str(uuid.uuid4()),
     ]
     return hashlib.md5("|".join(components).encode()).hexdigest()
 
-
 # ===================== NEWRELIC HEADERS =====================
 def _newrelic_headers() -> dict:
-    """Generate NewRelic tracking headers required by SheerID."""
-    trace_id = uuid.uuid4().hex + uuid.uuid4().hex[:8]
-    trace_id = trace_id[:32]
+    """Generates NewRelic tracking headers required by SheerID."""
+    trace_id = uuid.uuid4().hex
     span_id = uuid.uuid4().hex[:16]
     ts = int(time.time() * 1000)
-
     payload = {
         "v": [0, 1],
-        "d": {
-            "ty": "Browser",
-            "ac": "364029",
-            "ap": "134291347",
-            "id": span_id,
-            "tr": trace_id,
-            "ti": ts,
-        },
+        "d": {"ty": "Browser", "ac": "364029", "ap": "134291347", "id": span_id, "tr": trace_id, "ti": ts},
     }
     return {
         "newrelic": base64.b64encode(json.dumps(payload).encode()).decode(),
@@ -119,158 +104,98 @@ def _newrelic_headers() -> dict:
         "tracestate": f"364029@nr=0-1-364029-134291347-{span_id}----{ts}",
     }
 
-
 # ===================== HEADERS =====================
-def get_sheerid_headers() -> dict:
-    """Full browser-like headers for SheerID API calls."""
-    ua = random.choice(USER_AGENTS)
-    platform = random.choice(PLATFORMS)
+def get_sheerid_headers(profile: dict) -> dict:
+    """Generates full, consistent browser-like headers for a given profile."""
     lang = random.choice(LANGUAGES)
     nr = _newrelic_headers()
-
-    return {
+    headers = {
         "accept": "application/json, text/plain, */*",
         "accept-encoding": "gzip, deflate, br, zstd",
         "accept-language": lang,
-        "cache-control": "no-cache",
-        "pragma": "no-cache",
+        "cache-control": "no-cache", "pragma": "no-cache",
         "content-type": "application/json",
-        "sec-ch-ua": platform[2],
         "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": platform[1],
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "user-agent": ua,
-        "clientversion": "2.158.0",
-        "clientname": "jslib",
+        "sec-fetch-dest": "empty", "sec-fetch-mode": "cors", "sec-fetch-site": "same-origin",
+        "user-agent": profile["user_agent"],
+        "clientversion": "2.158.0", "clientname": "jslib",
         "origin": "https://services.sheerid.com",
         "referer": "https://services.sheerid.com/",
         **nr,
     }
-
+    if profile["sec_ch_ua"]:
+        headers["sec-ch-ua"] = profile["sec_ch_ua"]
+        headers["sec-ch-ua-platform"] = profile["platform"]
+    return headers
 
 # ===================== DELAYS =====================
-def human_delay(min_ms: int = 300, max_ms: int = 1200):
-    """Sleep with human-like timing (gamma distribution when possible)."""
+def human_delay(min_ms: int = 400, max_ms: int = 1500 ):
+    """Sleeps with a more human-like timing distribution."""
     try:
         import numpy as np
-        shape, scale = 2.0, (max_ms - min_ms) / 4000
-        delay = min_ms / 1000 + np.random.gamma(shape, scale)
-        delay = min(delay, max_ms / 1000)
+        # Use a gamma distribution for more realistic, non-uniform delays
+        shape, scale = 2.0, (max_ms - min_ms) / 4000.0
+        delay = min_ms / 1000.0 + np.random.gamma(shape, scale)
+        time.sleep(min(delay, max_ms / 1000.0))
     except ImportError:
-        delay = random.randint(min_ms, max_ms) / 1000
-        delay += random.uniform(0, 0.15)
-    time.sleep(delay)
+        time.sleep(random.uniform(min_ms / 1000.0, max_ms / 1000.0))
 
-
-# ===================== SESSION =====================
+# ===================== SESSION CREATION =====================
 def _format_proxy(proxy: str) -> str | None:
-    """Normalize various proxy formats to http://... URL."""
-    if not proxy:
-        return None
-    proxy = proxy.strip()
-    if "://" in proxy:
-        return proxy
+    """Normalizes various proxy formats to a standard http://... URL."""
+    if not proxy: return None
+    proxy = proxy.strip( )
+    if "://" in proxy: return proxy
     parts = proxy.split(":")
-    if len(parts) == 2:
-        return f"http://{parts[0]}:{parts[1]}"
-    elif len(parts) == 4:
-        return f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
-    elif "@" in proxy:
-        return f"http://{proxy}"
-    return None
+    if len(parts) == 2: return f"http://{parts[0]}:{parts[1]}"
+    if len(parts ) == 4: return f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
+    return f"http://{proxy}" if "@" in proxy else None
 
+def create_session(proxy: str = None ):
+    """Creates an HTTP session with the best available library and a random browser profile."""
+    proxy_url = _format_proxy(proxy or get_random_proxy())
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+    if proxy_url: logger.info(f"🔒 Proxy configured: {proxy_url[:35]}..." )
 
-def create_session(proxy: str = None):
-    """Create HTTP session with best available library.
+    profile = random.choice(BROWSER_PROFILES)
+    impersonate_version = profile["impersonate"]
 
-    Priority: curl_cffi (TLS spoofing)  > httpx > requests
-
-    Args:
-        proxy: Proxy URL override. Falls back to PROXY_URL env var.
-
-    Returns:
-        tuple: (session, library_name)
-    """
-    proxy = _format_proxy(proxy or get_random_proxy())
-    proxies = None
-    if proxy:
-        proxies = {"http": proxy, "https": proxy, "all://": proxy}
-        logger.info(f"🔒 Proxy configured: {proxy[:35]}...")
-
-    imp = DEFAULT_IMPERSONATE
-
-    # 1. Try curl_cffi (best — TLS fingerprint matches real Chrome)
     try:
-        from curl_cffi import requests as curl_requests
+        from curl_cffi.requests import Session
+        sess = Session(proxies=proxies, impersonate=impersonate_version, timeout=30)
+        logger.info(f"✅ Anti-detect: curl_cffi + {impersonate_version} TLS impersonation")
+        return sess, "curl_cffi", profile
+    except (ImportError, Exception) as e:
+        if isinstance(e, ImportError):
+            logger.warning("❌ curl_cffi not installed — TLS fingerprint is detectable! Install: pip install curl_cffi")
+        else:
+            logger.warning(f"curl_cffi impersonation failed for {impersonate_version}, falling back. Error: {e}")
 
-        for ver in [imp, "chrome120", "chrome110", "chrome100"]:
-            try:
-                sess = (
-                    curl_requests.Session(proxies=proxies, impersonate=ver)
-                    if proxies
-                    else curl_requests.Session(impersonate=ver)
-                )
-                logger.info(f"✅ Anti-detect: curl_cffi + {ver} TLS impersonation")
-                return sess, "curl_cffi"
-            except Exception:
-                continue
-
-        # curl_cffi without impersonation
-        sess = curl_requests.Session(proxies=proxies) if proxies else curl_requests.Session()
-        logger.warning("⚠️  curl_cffi loaded but TLS impersonation failed")
-        return sess, "curl_cffi"
-
-    except ImportError:
-        logger.warning("❌ curl_cffi not installed — TLS fingerprint detectable!")
-        logger.warning("   Install: pip install curl_cffi")
-
-    # 2. httpx (detectable TLS but functional)
     try:
         import httpx
-        proxy_url = proxies.get("all://") if proxies else None
-        sess = httpx.Client(timeout=30, proxy=proxy_url)
-        logger.info("⚠️  Anti-detect: httpx (no TLS spoofing)")
-        return sess, "httpx"
+        client_proxies = proxies.get("http" ) if proxies else None
+        sess = httpx.Client(timeout=30, proxies=client_proxies )
+        logger.warning("⚠️ Anti-detect: httpx (no TLS spoofing, higher detection risk )")
+        return sess, "httpx", profile
     except ImportError:
-        pass
+        import requests
+        sess = requests.Session( )
+        if proxies: sess.proxies = proxies
+        logger.error("❌ Anti-detect: requests (VERY HIGH detection risk)")
+        return sess, "requests", profile
 
-    # 3. Fallback to requests
-    import requests
-    sess = requests.Session()
-    if proxies:
-        sess.proxies = proxies
-    logger.warning("❌ Anti-detect: requests (HIGH detection risk)")
-    return sess, "requests"
-
-
-# ===================== WARMUP =====================
-def warm_session(session, program_id: str = None):
-    """Pre-requests to simulate real browser page load."""
+# ===================== SESSION WARMUP =====================
+def warm_session(session, profile: dict, program_id: str = None):
+    """Performs pre-requests to simulate a real browser loading the page."""
     base = "https://services.sheerid.com"
-    hdrs = get_sheerid_headers()
-
+    hdrs = get_sheerid_headers(profile )
     try:
         session.get(f"{base}/rest/v2/config", headers=hdrs, timeout=10)
         human_delay(500, 1000)
-    except Exception:
-        pass
-
-    if program_id:
-        try:
+        if program_id:
             session.get(f"{base}/rest/v2/program/{program_id}", headers=hdrs, timeout=10)
             human_delay(300, 700)
-        except Exception:
-            pass
+        session.get(f"{base}/rest/v2/organization/search", params={"country": "US", "term": ""}, headers=hdrs, timeout=10)
+    except Exception as e:
+        logger.warning(f"Session warmup failed: {e}")
 
-    try:
-        session.get(
-            f"{base}/rest/v2/organization/search",
-            params={"country": "US", "term": "", **({"programId": program_id} if program_id else {})},
-            headers=hdrs,
-            timeout=10,
-        )
-        human_delay(200, 500)
-    except Exception:
-        pass

@@ -1,109 +1,86 @@
-"""Real American name generator for student verification"""
+"""
+Generates realistic American names to improve success rate and avoid fraud detection.
+"""
 import random
-
-
-# Top 100 real American first names (mix of male/female)
-FIRST_NAMES_MALE = [
-    "James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph",
-    "Thomas", "Christopher", "Charles", "Daniel", "Matthew", "Anthony", "Mark",
-    "Donald", "Steven", "Andrew", "Paul", "Joshua", "Kenneth", "Kevin", "Brian",
-    "George", "Timothy", "Ronald", "Jason", "Edward", "Jeffrey", "Ryan",
-    "Jacob", "Gary", "Nicholas", "Eric", "Jonathan", "Stephen", "Larry",
-    "Justin", "Scott", "Brandon", "Benjamin", "Samuel", "Raymond", "Gregory",
-    "Frank", "Alexander", "Patrick", "Jack", "Dennis", "Nathan",
-    "Tyler", "Ethan", "Dylan", "Logan", "Mason", "Lucas", "Noah", "Liam",
-    "Owen", "Caleb", "Hunter", "Connor", "Adrian", "Evan", "Cole",
-]
-
-FIRST_NAMES_FEMALE = [
-    "Mary", "Patricia", "Jennifer", "Linda", "Barbara", "Elizabeth", "Susan",
-    "Jessica", "Sarah", "Karen", "Lisa", "Nancy", "Betty", "Margaret", "Sandra",
-    "Ashley", "Dorothy", "Kimberly", "Emily", "Donna", "Michelle", "Carol",
-    "Amanda", "Melissa", "Deborah", "Stephanie", "Rebecca", "Sharon", "Laura",
-    "Cynthia", "Kathleen", "Amy", "Angela", "Shirley", "Anna", "Brenda",
-    "Pamela", "Emma", "Nicole", "Helen", "Samantha", "Katherine", "Christine",
-    "Debra", "Rachel", "Carolyn", "Janet", "Catherine", "Maria", "Heather",
-    "Olivia", "Sophia", "Isabella", "Mia", "Charlotte", "Amelia", "Harper",
-    "Evelyn", "Abigail", "Ella", "Scarlett", "Grace", "Lily", "Hannah", "Aria",
-]
-
-# Real American last names (top 200 by frequency)
-LAST_NAMES = [
-    "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
-    "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
-    "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson",
-    "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson",
-    "Walker", "Young", "Allen", "King", "Wright", "Scott", "Torres", "Nguyen",
-    "Hill", "Flores", "Green", "Adams", "Nelson", "Baker", "Hall", "Rivera",
-    "Campbell", "Mitchell", "Carter", "Roberts", "Gomez", "Phillips", "Evans",
-    "Turner", "Diaz", "Parker", "Cruz", "Edwards", "Collins", "Reyes",
-    "Stewart", "Morris", "Morales", "Murphy", "Cook", "Rogers", "Gutierrez",
-    "Ortiz", "Morgan", "Cooper", "Peterson", "Bailey", "Reed", "Kelly",
-    "Howard", "Ramos", "Kim", "Cox", "Ward", "Richardson", "Watson", "Brooks",
-    "Chavez", "Wood", "James", "Bennett", "Gray", "Mendoza", "Ruiz", "Hughes",
-    "Price", "Alvarez", "Castillo", "Sanders", "Patel", "Myers", "Long", "Ross",
-    "Foster", "Jimenez", "Powell", "Jenkins", "Perry", "Russell", "Sullivan",
-    "Bell", "Coleman", "Butler", "Henderson", "Barnes", "Gonzales", "Fisher",
-    "Vasquez", "Simmons", "Graham", "Murray", "Ford", "Castro", "Marshall",
-    "Owens", "Harrison", "Fernandez", "McDonald", "Woods", "Washington",
-    "Kennedy", "Wells", "Vargas", "Henry", "Chen", "Freeman", "Webb", "Tucker",
-    "Hicks", "Crawford", "Cunningham", "Watkins", "Harper", "Schmidt",
-]
-
+from datetime import datetime, timedelta
 
 class NameGenerator:
-    """Real American name generator"""
-
-    @classmethod
-    def generate(cls):
-        """Generate a realistic random American name.
-
-        Returns:
-            dict with first_name, last_name, full_name
-        """
-        # 50/50 male/female
-        if random.random() < 0.5:
-            first_name = random.choice(FIRST_NAMES_MALE)
-        else:
-            first_name = random.choice(FIRST_NAMES_FEMALE)
-
-        last_name = random.choice(LAST_NAMES)
-
-        # 50% chance of middle initial
-        if random.random() < 0.5:
-            middle_initial = random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-            full_name = f"{first_name} {middle_initial}. {last_name}"
-        else:
-            full_name = f"{first_name} {last_name}"
-
-        return {
-            "first_name": first_name,
-            "last_name": last_name,
-            "full_name": full_name,
-        }
-
-
-def generate_email(school_domain="PSU.EDU"):
-    """Generate a random school email.
-
-    Args:
-        school_domain: School domain
-
-    Returns:
-        str: Email address
     """
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    username = "".join(random.choice(chars) for _ in range(8))
-    return f"{username}@{school_domain}"
-
-
-def generate_birth_date():
-    """Generate a random birth date (1998-2005).
-
-    Returns:
-        str: YYYY-MM-DD format
+    Generates a random, realistic American name from expanded lists.
+    This helps avoid pattern detection by SheerID's fraud systems.
     """
-    year = random.randint(1998, 2005)
-    month = str(random.randint(1, 12)).zfill(2)
-    day = str(random.randint(1, 28)).zfill(2)
-    return f"{year}-{month}-{day}"
+    # SOLUTION: Massively expanded the name lists to create thousands more unique combinations,
+    # reducing the chance of submitting a name that has been flagged before.
+    first_names = [
+        # Common Male Names
+        "James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph",
+        "Thomas", "Charles", "Christopher", "Daniel", "Matthew", "Anthony", "Mark",
+        "Donald", "Steven", "Paul", "Andrew", "Joshua", "Kenneth", "Kevin", "Brian",
+        "George", "Edward", "Ronald", "Timothy", "Jason", "Jeffrey", "Ryan", "Jacob",
+        "Gary", "Nicholas", "Eric", "Jonathan", "Stephen", "Larry", "Justin", "Scott",
+        "Brandon", "Benjamin", "Samuel", "Gregory", "Frank", "Alexander", "Raymond",
+        "Patrick", "Jack", "Dennis", "Jerry", "Tyler", "Aaron", "Jose", "Adam", "Henry",
+        "Nathan", "Douglas", "Zachary", "Peter", "Kyle", "Walter", "Ethan", "Jeremy",
+        "Harold", "Keith", "Christian", "Roger", "Noah", "Gerald", "Carl", "Terry",
+        "Sean", "Austin", "Arthur", "Lawrence", "Jesse", "Dylan", "Bryan", "Joe",
+        "Jordan", "Billy", "Bruce", "Albert", "Willie", "Gabriel", "Logan", "Alan",
+        "Juan", "Wayne", "Roy", "Ralph", "Randy", "Eugene", "Vincent", "Russell",
+        "Elijah", "Louis", "Bobby", "Philip", "Johnny", "Caleb", "Isaac", "Mason",
+
+        # Common Female Names
+        "Mary", "Patricia", "Jennifer", "Linda", "Elizabeth", "Barbara", "Susan",
+        "Jessica", "Sarah", "Karen", "Nancy", "Lisa", "Betty", "Margaret", "Sandra",
+        "Ashley", "Kimberly", "Emily", "Donna", "Michelle", "Dorothy", "Carol",
+        "Amanda", "Melissa", "Deborah", "Stephanie", "Rebecca", "Sharon", "Laura",
+        "Cynthia", "Kathleen", "Amy", "Shirley", "Angela", "Helen", "Anna", "Brenda",
+        "Pamela", "Nicole", "Emma", "Samantha", "Katherine", "Christine", "Debra",
+        "Rachel", "Catherine", "Carolyn", "Janet", "Ruth", "Maria", "Heather",
+        "Diane", "Virginia", "Julie", "Joyce", "Victoria", "Olivia", "Kelly",
+        "Christina", "Lauren", "Joan", "Evelyn", "Judith", "Megan", "Cheryl",
+        "Andrea", "Hannah", "Martha", "Jacqueline", "Frances", "Gloria", "Ann",
+        "Teresa", "Kathryn", "Sara", "Janice", "Jean", "Alice", "Madison",
+        "Doris", "Rose", "Isabella", "Amber", "Marilyn", "Danielle",
+        "Brittany", "Diana", "Natalie", "Sophia", "Grace", "Lily", "Chloe"
+    ]
+    last_names = [
+        "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis",
+        "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson",
+        "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson",
+        "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson", "Walker",
+        "Young", "Allen", "King", "Wright", "Scott", "Torres", "Nguyen", "Hill",
+        "Flores", "Green", "Adams", "Nelson", "Baker", "Hall", "Rivera", "Campbell",
+        "Mitchell", "Carter", "Roberts", "Gomez", "Phillips", "Evans", "Turner",
+        "Diaz", "Parker", "Cruz", "Edwards", "Collins", "Reyes", "Stewart", "Morris",
+        "Morales", "Murphy", "Cook", "Rogers", "Gutierrez", "Ortiz", "Morgan",
+        "Cooper", "Peterson", "Bailey", "Reed", "Kelly", "Howard", "Ramos", "Kim",
+        "Cox", "Ward", "Richardson", "Watson", "Brooks", "Chavez", "Wood", "James",
+        "Bennet", "Gray", "Mendoza", "Ruiz", "Hughes", "Price", "Alvarez", "Castillo",
+        "Sanders", "Patel", "Myers", "Long", "Ross", "Foster", "Jimenez", "Powell",
+        "Jenkins", "Perry", "Russell", "Sullivan", "Bell", "Coleman", "Butler",
+        "Henderson", "Barnes", "Gonzales", "Fisher", "Vasquez", "Simmons", "Graham",
+        "Murray", "Ford", "Castro", "Marshall", "Owens", "Harrison", "Fernandez",
+        "McDonald", "Woods", "Washington", "Kennedy", "Wells", "Vargas", "Henry",
+        "Chen", "Freeman", "Webb", "Tucker", "Hicks", "Crawford", "Cunningham",
+        "Watkins", "Harper", "Schmidt", "Shaw", "Murray", "Ford", "Hamilton"
+    ]
+
+    @staticmethod
+    def generate():
+        """Generates a dictionary containing a random first and last name."""
+        first_name = random.choice(NameGenerator.first_names)
+        last_name = random.choice(NameGenerator.last_names)
+        return {"first_name": first_name, "last_name": last_name}
+
+def generate_birth_date(min_age=19, max_age=25):
+    """
+    Generates a random birth date for a typical college-aged student.
+    Returns a date string in YYYY-MM-DD format.
+    """
+    today = datetime.today()
+    start_date = today - timedelta(days=max_age * 365)
+    end_date = today - timedelta(days=min_age * 365)
+    time_between_dates = end_date - start_date
+    days_between_dates = time_between_dates.days
+    random_number_of_days = random.randrange(days_between_dates)
+    birth_date = start_date + timedelta(days=random_number_of_days)
+    return birth_date.strftime("%Y-%m-%d")
